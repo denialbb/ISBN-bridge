@@ -43,10 +43,10 @@ class ServerManager {
 
     static FindBinary() {
         candidates := [
-            A_ScriptDir "\isbn-bridge.exe",
-            A_ScriptDir "\..\bin\isbn-bridge.exe",
-            A_ScriptDir "\bin\isbn-bridge.exe",
-            A_WorkingDir "\bin\isbn-bridge.exe"
+            A_ScriptDir "\isbn-bridge-server.exe",
+            A_ScriptDir "\..\bin\isbn-bridge-server.exe",
+            A_ScriptDir "\bin\isbn-bridge-server.exe",
+            A_WorkingDir "\bin\isbn-bridge-server.exe"
         ]
         for path in candidates {
             if FileExist(path)
@@ -56,7 +56,7 @@ class ServerManager {
     }
 
     static IsRunning() {
-        return ProcessExist("isbn-bridge.exe") != 0
+        return ProcessExist("isbn-bridge-server.exe") != 0
     }
 
     ; Make sure the Go server answers. Starts it if needed and polls
@@ -89,7 +89,7 @@ class ServerManager {
             return hwnd
         if hwnd := WinExist("ISBN Bridge Server")
             return hwnd
-        if hwnd := WinExist("ahk_exe isbn-bridge.exe")
+        if hwnd := WinExist("ahk_exe isbn-bridge-server.exe")
             return hwnd
         return 0
     }
@@ -167,7 +167,7 @@ class ServerManager {
         ; 2. Terminate server if still running
         if this.serverPid && ProcessExist(this.serverPid)
             ProcessClose(this.serverPid)
-        if ProcessExist("isbn-bridge.exe")
-            ProcessClose("isbn-bridge.exe")
+        if ProcessExist("isbn-bridge-server.exe")
+            ProcessClose("isbn-bridge-server.exe")
     }
 }

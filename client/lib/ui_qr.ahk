@@ -37,6 +37,11 @@ class QRModal {
         hintCtrl := this.guiInstance.Add("Text", "Center w" size " y+8", I18n.Get("qr_hint"))
         hintCtrl.OnEvent("Click", (*) => this.Hide())
 
+        ; Faded brand line, centered at the bottom
+        this.guiInstance.SetFont("s10 bold c94a3b8", "Segoe UI")
+        brandCtrl := this.guiInstance.Add("Text", "Center w" size " y+4", "ISBN Bridge")
+        brandCtrl.OnEvent("Click", (*) => this.Hide())
+
         this.guiInstance.OnEvent("Escape", (*) => this.Hide())
         this.guiInstance.OnEvent("Close", (*) => this.Hide())
 

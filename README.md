@@ -88,7 +88,7 @@ For full setup instructions, see [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 
 ```powershell
 # Windows binary
-.\bin\isbn-bridge.exe
+.\bin\isbn-bridge-server.exe
 ```
 
 ### 2. Start the AutoHotkey Client
