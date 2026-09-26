@@ -28,19 +28,19 @@ class QRModal {
 
         size := AppConfig.qrPopupSize
 
+        ; Brand line on top: serif, faded slate
+        this.guiInstance.SetFont("s12 bold c7d8ca3", "Georgia")
+        brandCtrl := this.guiInstance.Add("Text", "Center w" size, "ISBN Bridge")
+        brandCtrl.OnEvent("Click", (*) => this.Hide())
+
         ; Crisp QR Code
-        imgCtrl := this.guiInstance.Add("Picture", "w" size " h" size " Center", tempQR)
+        imgCtrl := this.guiInstance.Add("Picture", "w" size " h" size " Center y+6", tempQR)
         imgCtrl.OnEvent("Click", (*) => this.Hide())
 
         ; Minimal single-line hint
-        this.guiInstance.SetFont("s8 norm c64748b", "Segoe UI")
+        this.guiInstance.SetFont("s8 norm c64748b", "Verdana")
         hintCtrl := this.guiInstance.Add("Text", "Center w" size " y+8", I18n.Get("qr_hint"))
         hintCtrl.OnEvent("Click", (*) => this.Hide())
-
-        ; Faded brand line, centered at the bottom
-        this.guiInstance.SetFont("s10 bold c94a3b8", "Segoe UI")
-        brandCtrl := this.guiInstance.Add("Text", "Center w" size " y+4", "ISBN Bridge")
-        brandCtrl.OnEvent("Click", (*) => this.Hide())
 
         this.guiInstance.OnEvent("Escape", (*) => this.Hide())
         this.guiInstance.OnEvent("Close", (*) => this.Hide())
