@@ -146,12 +146,19 @@ func (m *TokenManager) CurrentToken() string {
 }
 
 // GenerateQRCodePNG creates a PNG image of the current pairing QR code.
+// The QR border is disabled so the popup card hugs the code; the card's
+// own white margin doubles as the scanner quiet zone.
 func (m *TokenManager) GenerateQRCodePNG() ([]byte, error) {
 	payload, err := m.GetPairingPayload()
 	if err != nil {
 		return nil, err
 	}
-	return qrcode.Encode(payload, qrcode.Medium, 256)
+	q, err := qrcode.New(payload, qrcode.Medium)
+	if err != nil {
+		return nil, err
+	}
+	q.DisableBorder = true
+	return q.PNG(256)
 }
 
 // PrintTerminalQR prints an ANSI QR code of the current pairing payload to the given writer.

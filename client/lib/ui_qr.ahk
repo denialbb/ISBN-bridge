@@ -20,8 +20,8 @@ class QRModal {
         ; Ultra-minimal, borderless floating QR card
         this.guiInstance := Gui("+AlwaysOnTop -Caption +Border +ToolWindow", I18n.Get("app_title"))
         this.guiInstance.BackColor := "0xFFFFFF"
-        this.guiInstance.MarginX := 8
-        this.guiInstance.MarginY := 8
+        this.guiInstance.MarginX := 6
+        this.guiInstance.MarginY := 6
 
         size := AppConfig.qrPopupSize
 
