@@ -65,7 +65,7 @@ func (s *Server) Handler() http.Handler {
 
 // Addr returns the server listen address.
 func (s *Server) Addr() string {
-	return fmt.Sprintf(":%d", s.port)
+	return fmt.Sprintf("0.0.0.0:%d", s.port)
 }
 
 func (s *Server) routes() {
@@ -184,30 +184,24 @@ func (s *Server) handleGetQRHTML(w http.ResponseWriter, r *http.Request) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ISBN Bridge Token QR</title>
+  <title>ISBN Bridge - Pairing</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding: 40px 20px; background: #f8fafc; color: #1e293b; }
-    .card { background: white; max-width: 440px; margin: 0 auto; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-    img { width: 260px; height: 260px; border-radius: 8px; margin: 15px 0; border: 1px solid #e2e8f0; }
-    .token { font-family: monospace; font-size: 13px; background: #f1f5f9; padding: 10px; border-radius: 6px; word-break: break-all; margin: 15px 0; border: 1px solid #cbd5e1; }
-    button { background: #2563eb; color: white; border: none; padding: 10px 20px; font-size: 15px; border-radius: 8px; cursor: pointer; font-weight: 500; }
-    button:hover { background: #1d4ed8; }
-    .note { font-size: 12px; color: #64748b; margin-top: 15px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #0f172a; color: #f8fafc; }
+    .card { background: #1e293b; max-width: 360px; width: 90%%; padding: 28px 20px; border-radius: 20px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3); border: 1px solid #334155; }
+    img { width: 240px; height: 240px; border-radius: 12px; margin: 16px auto; background: white; padding: 8px; display: block; }
+    h2 { font-size: 1.15rem; font-weight: 600; margin: 0 0 6px 0; }
+    p { font-size: 0.85rem; color: #94a3b8; margin: 0; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h2>Scan Token for Shortcuts</h2>
-    <p>Scan this QR code with your iPhone token updater shortcut.</p>
-    <img src="data:image/png;base64,%s" alt="Token QR Code" />
-    <div class="token">%s</div>
-    <form method="POST" action="/token/refresh">
-      <button type="submit">Rotate / Regenerate Token</button>
-    </form>
-    <div class="note">Tokens automatically refresh every hour for security.</div>
+    <h2>ISBN Bridge</h2>
+    <p>Inquadra con la fotocamera per abbinare</p>
+    <img src="data:image/png;base64,%s" alt="QR Code" />
+    <p style="font-size: 0.75rem; color: #64748b;">Token attivo: %s</p>
   </div>
 </body>
-</html>`, b64, token)
+</html>`, b64, token[:8]+"...")
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)

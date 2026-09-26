@@ -30,6 +30,8 @@ class TrayManager {
 
         ; Quick actions
         A_TrayMenu.Add("Mostra QR code al centro", (*) => QRModal.Show())
+        A_TrayMenu.Default := "Mostra QR code al centro"
+        A_TrayMenu.ClickCount := 1
         A_TrayMenu.Add("Reset token (Nuovo QR)", (*) => this.ResetToken())
         A_TrayMenu.Add("Apri scanner.conf", (*) => Run(AppConfig.filePath))
         A_TrayMenu.Add("Svuota ISBN in sospeso", (*) => PasteEngine.Cancel())

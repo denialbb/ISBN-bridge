@@ -91,8 +91,14 @@ func main() {
 	// Trigger seamless centered QR popup in AutoHotkey on startup
 	if appCfg.QRAutoShowOnRefresh {
 		go func() {
-			time.Sleep(500 * time.Millisecond) // Give AHK a moment to be listening
-			_ = forwarder.ShowQR(context.Background())
+			for i := 0; i < 10; i++ {
+				time.Sleep(500 * time.Millisecond)
+				if err := forwarder.ShowQR(context.Background()); err == nil {
+					log.Printf("Successfully requested QR modal popup from AutoHotkey")
+					return
+				}
+			}
+			log.Printf("Note: AutoHotkey listener not reachable for startup QR popup")
 		}()
 	}
 

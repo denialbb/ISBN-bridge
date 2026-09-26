@@ -39,3 +39,7 @@ Hotkey("~LButton", (*) => PasteEngine.HandleLeftClick())
 Hotkey("~Esc", (*) => (PasteEngine.Cancel(), QRModal.Hide()))
 
 TrayTip("Client ISBN Bridge attivo (Porta: " AppConfig.httpPort ")", "ISBN Bridge")
+
+; Show QR modal on startup if configured
+if AppConfig.qrAutoShowOnRefresh
+    SetTimer(() => QRModal.Show(), -400)
