@@ -5,9 +5,14 @@ class SoundManager {
         if !AppConfig.playTapSoundEnabled
             return
 
-        tapPath := this.FindSoundFile("tap.wav")
-        if (tapPath != "" && FileExist(tapPath)) {
-            SoundPlay(tapPath)
+        soundFile := (AppConfig.soundFile != "") ? AppConfig.soundFile : "tap.wav"
+        this.PlaySoundFile(soundFile)
+    }
+
+    static PlaySoundFile(name) {
+        soundPath := this.FindSoundFile(name)
+        if (soundPath != "" && FileExist(soundPath)) {
+            SoundPlay(soundPath)
             return
         }
 
@@ -19,7 +24,15 @@ class SoundManager {
         }
     }
 
+    static SetSound(filename) {
+        AppConfig.soundFile := filename
+        AppConfig.Save("AutoPaste", "sound_file", filename)
+        this.PlaySoundFile(filename)
+    }
+
     static FindSoundFile(name) {
+        if FileExist(name)
+            return name
         if FileExist(A_ScriptDir "\" name)
             return A_ScriptDir "\" name
         if FileExist(A_ScriptDir "\..\" name)

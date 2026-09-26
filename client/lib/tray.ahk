@@ -2,6 +2,7 @@
 
 class TrayManager {
     static expiryMenu := Menu()
+    static soundMenu := Menu()
 
     static Init() {
         A_TrayMenu.Delete()
@@ -24,7 +25,20 @@ class TrayManager {
         ; Configurable options
         A_TrayMenu.Add("Sovrascrivi testo (Ctrl+A)", (*) => this.ToggleOverwrite())
         A_TrayMenu.Add("Auto-incolla al passaggio (senza clic)", (*) => this.ToggleAutoHover())
-        A_TrayMenu.Add("Suono al tocco (Tap)", (*) => this.ToggleSound())
+
+        ; Sound sample submenu
+        this.soundMenu := Menu()
+        this.soundMenu.Add("Tap (Morbido / Attuale)", (*) => this.SelectSound("tap.wav"))
+        this.soundMenu.Add("iOS Tock (Clic felpato)", (*) => this.SelectSound("sounds/ios_tock.wav"))
+        this.soundMenu.Add("Bubble Pop (Goccia / Pop morbido)", (*) => this.SelectSound("sounds/bubble_pop.wav"))
+        this.soundMenu.Add("Gentle Chime (Accordo marimba)", (*) => this.SelectSound("sounds/gentle_chime.wav"))
+        this.soundMenu.Add("Modern Beep (Scanner discreto)", (*) => this.SelectSound("sounds/modern_beep.wav"))
+        this.soundMenu.Add("Mechanical Click (Switch tastiera)", (*) => this.SelectSound("sounds/mechanical_click.wav"))
+        this.soundMenu.Add("Windows Navigation (Tick classico)", (*) => this.SelectSound("sounds/windows_navigation.wav"))
+        this.soundMenu.Add()
+        this.soundMenu.Add("Abilita suono", (*) => this.ToggleSound())
+
+        A_TrayMenu.Add("Suono feedback", this.soundMenu)
         A_TrayMenu.Add("Mostra QR code al cambio token", (*) => this.ToggleAutoQR())
         A_TrayMenu.Add()
 
@@ -69,7 +83,12 @@ class TrayManager {
         AppConfig.playTapSoundEnabled := !AppConfig.playTapSoundEnabled
         AppConfig.Save("AutoPaste", "play_tap_sound", AppConfig.playTapSoundEnabled ? "true" : "false")
         this.UpdateState()
-        TrayTip(AppConfig.playTapSoundEnabled ? "Suono al tocco attivo." : "Suono al tocco disattivato.", "ISBN Bridge")
+        TrayTip(AppConfig.playTapSoundEnabled ? "Suono feedback attivo." : "Suono feedback disattivato.", "ISBN Bridge")
+    }
+
+    static SelectSound(path) {
+        SoundManager.SetSound(path)
+        this.UpdateState()
     }
 
     static ToggleAutoQR() {
@@ -121,9 +140,34 @@ class TrayManager {
         if AppConfig.autoPasteOnHover
             A_TrayMenu.Check("Auto-incolla al passaggio (senza clic)")
 
-        A_TrayMenu.Uncheck("Suono al tocco (Tap)")
+        this.soundMenu.Uncheck("Abilita suono")
         if AppConfig.playTapSoundEnabled
-            A_TrayMenu.Check("Suono al tocco (Tap)")
+            this.soundMenu.Check("Abilita suono")
+
+        soundFiles := [
+            "tap.wav",
+            "sounds/ios_tock.wav",
+            "sounds/bubble_pop.wav",
+            "sounds/gentle_chime.wav",
+            "sounds/modern_beep.wav",
+            "sounds/mechanical_click.wav",
+            "sounds/windows_navigation.wav"
+        ]
+        soundLabels := [
+            "Tap (Morbido / Attuale)",
+            "iOS Tock (Clic felpato)",
+            "Bubble Pop (Goccia / Pop morbido)",
+            "Gentle Chime (Accordo marimba)",
+            "Modern Beep (Scanner discreto)",
+            "Mechanical Click (Switch tastiera)",
+            "Windows Navigation (Tick classico)"
+        ]
+
+        Loop soundFiles.Length {
+            this.soundMenu.Uncheck(soundLabels[A_Index])
+            if (AppConfig.soundFile = soundFiles[A_Index])
+                this.soundMenu.Check(soundLabels[A_Index])
+        }
 
         A_TrayMenu.Uncheck("Mostra QR code al cambio token")
         if AppConfig.qrAutoShowOnRefresh

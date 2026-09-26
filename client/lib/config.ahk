@@ -10,6 +10,7 @@ class AppConfig {
     static overwriteExistingText := true
     static autoPasteOnHover := true
     static playTapSoundEnabled := true
+    static soundFile := "tap.wav"
     static tooltipOffsetX := 10
     static tooltipOffsetY := 12
     static qrAutoShowOnRefresh := true
@@ -42,6 +43,7 @@ class AppConfig {
         this.overwriteExistingText := (IniRead(this.filePath, "AutoPaste", "overwrite_existing_text", "true") = "true")
         this.autoPasteOnHover := (IniRead(this.filePath, "AutoPaste", "auto_paste_on_hover", "true") = "true")
         this.playTapSoundEnabled := (IniRead(this.filePath, "AutoPaste", "play_tap_sound", "true") = "true")
+        this.soundFile := IniRead(this.filePath, "AutoPaste", "sound_file", "tap.wav")
 
         this.tooltipOffsetX := Integer(IniRead(this.filePath, "AutoPaste", "tooltip_offset_x", 10))
         this.tooltipOffsetY := Integer(IniRead(this.filePath, "AutoPaste", "tooltip_offset_y", 12))
