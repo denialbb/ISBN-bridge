@@ -5,6 +5,15 @@ class QRModal {
     static autoHideTimer := ObjBindMethod(QRModal, "Hide")
 
     static Show(*) {
+        if (this.guiInstance) {
+            ; Already on screen: re-activate and extend auto-hide
+            ; instead of rebuilding (avoids flicker on repeat clicks).
+            try WinActivate(this.guiInstance.Hwnd)
+            if (AppConfig.qrAutoHideSeconds > 0)
+                SetTimer(this.autoHideTimer, -AppConfig.qrAutoHideSeconds * 1000)
+            return
+        }
+
         Logger.Log("QRModal.Show invoked")
         tempQR := A_Temp "\isbn_bridge_qr.png"
         if !this.TryDownload(tempQR) {
@@ -17,8 +26,6 @@ class QRModal {
                 return
             }
         }
-
-        this.Hide()
 
         ; Ultra-minimal, borderless floating QR card
         this.guiInstance := Gui("+AlwaysOnTop -Caption +Border +ToolWindow", I18n.Get("app_title"))
