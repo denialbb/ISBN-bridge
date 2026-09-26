@@ -44,7 +44,7 @@ class TrayManager {
     static ToggleEnabled() {
         PasteEngine.enabled := !PasteEngine.enabled
         this.UpdateState()
-        TrayTip(PasteEngine.enabled ? "Auto-incolla attivo." : "Auto-incolla disattivato.", "Biblios")
+        TrayTip(PasteEngine.enabled ? "Auto-incolla attivo." : "Auto-incolla disattivato.", "ISBN Bridge")
         if !PasteEngine.enabled
             PasteEngine.Cancel()
     }
@@ -53,21 +53,21 @@ class TrayManager {
         AppConfig.overwriteExistingText := !AppConfig.overwriteExistingText
         AppConfig.Save("AutoPaste", "overwrite_existing_text", AppConfig.overwriteExistingText ? "true" : "false")
         this.UpdateState()
-        TrayTip(AppConfig.overwriteExistingText ? "Sovrascrittura testo attiva." : "Sovrascrittura testo disattivata.", "Biblios")
+        TrayTip(AppConfig.overwriteExistingText ? "Sovrascrittura testo attiva." : "Sovrascrittura testo disattivata.", "ISBN Bridge")
     }
 
     static ToggleAutoHover() {
         AppConfig.autoPasteOnHover := !AppConfig.autoPasteOnHover
         AppConfig.Save("AutoPaste", "auto_paste_on_hover", AppConfig.autoPasteOnHover ? "true" : "false")
         this.UpdateState()
-        TrayTip(AppConfig.autoPasteOnHover ? "Auto-incolla al passaggio attivo." : "Auto-incolla al passaggio disattivato.", "Biblios")
+        TrayTip(AppConfig.autoPasteOnHover ? "Auto-incolla al passaggio attivo." : "Auto-incolla al passaggio disattivato.", "ISBN Bridge")
     }
 
     static ToggleSound() {
         AppConfig.playTapSoundEnabled := !AppConfig.playTapSoundEnabled
         AppConfig.Save("AutoPaste", "play_tap_sound", AppConfig.playTapSoundEnabled ? "true" : "false")
         this.UpdateState()
-        TrayTip(AppConfig.playTapSoundEnabled ? "Suono al tocco attivo." : "Suono al tocco disattivato.", "Biblios")
+        TrayTip(AppConfig.playTapSoundEnabled ? "Suono al tocco attivo." : "Suono al tocco disattivato.", "ISBN Bridge")
     }
 
     static ToggleAutoQR() {
@@ -86,10 +86,10 @@ class TrayManager {
             req.open("POST", AppConfig.goServerUrl "/token/ttl?minutes=" minutes, false)
             req.send()
 
-            TrayTip("Scadenza token impostata a " minutes " minuti.`nNuovo QR generato!", "Biblios")
+            TrayTip("Scadenza token impostata a " minutes " minuti.`nNuovo QR generato!", "ISBN Bridge")
             QRModal.Show()
         } catch {
-            TrayTip("Scadenza salvata nel file di configurazione.", "Biblios")
+            TrayTip("Scadenza salvata nel file di configurazione.", "ISBN Bridge")
         }
     }
 
@@ -99,10 +99,10 @@ class TrayManager {
             req.open("POST", AppConfig.goServerUrl "/token/refresh", false)
             req.send()
 
-            TrayTip("Token reimpostato con successo!`nNuovo QR generato.", "Biblios")
+            TrayTip("Token reimpostato con successo!`nNuovo QR generato.", "ISBN Bridge")
             QRModal.Show()
         } catch as err {
-            TrayTip("Errore di contatto col server Go su " AppConfig.goServerUrl, "Biblios", "Iconx")
+            TrayTip("Errore di contatto col server Go su " AppConfig.goServerUrl, "ISBN Bridge", "Iconx")
         }
     }
 

@@ -6,10 +6,10 @@ class Logger {
     static Init(path := "") {
         if (path != "") {
             this.logPath := path
-        } else if FileExist(A_ScriptDir "\biblios-debug.log") {
-            this.logPath := A_ScriptDir "\biblios-debug.log"
+        } else if FileExist(A_ScriptDir "\isbn-bridge-debug.log") {
+            this.logPath := A_ScriptDir "\isbn-bridge-debug.log"
         } else {
-            this.logPath := A_ScriptDir "\..\biblios-debug.log"
+            this.logPath := A_ScriptDir "\..\isbn-bridge-debug.log"
         }
     }
 

@@ -5,17 +5,17 @@ class QRModal {
     static autoHideTimer := ObjBindMethod(QRModal, "Hide")
 
     static Show(*) {
-        tempQR := A_Temp "\biblios_qr.png"
+        tempQR := A_Temp "\isbn_bridge_qr.png"
         try {
             Download(AppConfig.goServerUrl "/qr.png", tempQR)
         } catch as err {
-            TrayTip("Impossibile scaricare il QR code dal server Go.", "Biblios", "Iconx")
+            TrayTip("Impossibile scaricare il QR code dal server Go.", "ISBN Bridge", "Iconx")
             return
         }
 
         this.Hide()
 
-        this.guiInstance := Gui("+AlwaysOnTop -Caption +Border +ToolWindow", "Biblios Token")
+        this.guiInstance := Gui("+AlwaysOnTop -Caption +Border +ToolWindow", "ISBN Bridge Token")
         this.guiInstance.BackColor := "0xFFFFFF"
         this.guiInstance.MarginX := 24
         this.guiInstance.MarginY := 20
@@ -23,7 +23,7 @@ class QRModal {
         size := AppConfig.qrPopupSize
 
         this.guiInstance.SetFont("s13 bold c0f172a", "Segoe UI")
-        this.guiInstance.Add("Text", "Center w" size, "Scansiona Token Biblios")
+        this.guiInstance.Add("Text", "Center w" size, "Scansiona Token ISBN Bridge")
 
         this.guiInstance.SetFont("s9 norm c64748b", "Segoe UI")
         this.guiInstance.Add("Text", "Center w" size " y+4", "Inquadra con l'iPhone per abbinare il comando")

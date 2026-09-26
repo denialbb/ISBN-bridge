@@ -7,7 +7,7 @@ from datetime import datetime
 
 AHK_EXE = r"C:\Users\DanyB\AppData\Local\Programs\AutoHotkey\v2\AutoHotkey64.exe"
 AHK_SCRIPT = r"C:\Users\DanyB\OneDrive\Documenti\AutoHotkey\client\main.ahk"
-GO_EXE = r"C:\Users\DanyB\OneDrive\Documenti\AutoHotkey\bin\biblios-server.exe"
+GO_EXE = r"C:\Users\DanyB\OneDrive\Documenti\AutoHotkey\bin\isbn-bridge.exe"
 
 def test_full_pipeline():
     print("1. Starting AutoHotkey client...")

@@ -1,6 +1,6 @@
 # System Architecture & Technical Specifications
 
-This document details the internal architecture, network communication, and module structure of the **Biblios Scanner** pipeline.
+This document details the internal architecture, network communication, and module structure of the **ISBN Bridge** pipeline.
 
 ---
 
@@ -80,7 +80,7 @@ client/
 ├── main.ahk             # Entrypoint & hotkey wiring
 └── lib/
     ├── config.ahk       # AppConfig: scanner.conf parser & writer
-    ├── logger.ahk       # Logger: timestamped logging to biblios-debug.log
+    ├── logger.ahk       # Logger: timestamped logging to isbn-bridge-debug.log
     ├── paste.ahk        # PasteEngine: auto-paste & hover detection
     ├── server.ahk       # HttpListener: Winsock non-blocking HTTP server
     ├── sound.ahk        # SoundManager: tactile tap audio feedback

@@ -1,4 +1,4 @@
-module github.com/denialbb/biblios-scanner
+module github.com/denialbb/isbn-bridge
 
 go 1.26.4
 

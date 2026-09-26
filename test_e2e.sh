@@ -4,7 +4,7 @@ set -e
 cd "$(dirname "$0")"
 
 echo "Starting server in background..."
-./bin/biblios-server -port 8765 -no-terminal-qr &
+./bin/isbn-bridge -port 8765 -no-terminal-qr &
 PID=$!
 
 cleanup() {

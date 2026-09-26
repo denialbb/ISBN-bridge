@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/denialbb/biblios-scanner/pkg/auth"
-	"github.com/denialbb/biblios-scanner/pkg/config"
-	"github.com/denialbb/biblios-scanner/pkg/isbn"
+	"github.com/denialbb/isbn-bridge/pkg/auth"
+	"github.com/denialbb/isbn-bridge/pkg/config"
+	"github.com/denialbb/isbn-bridge/pkg/isbn"
 )
 
 const maxBodyBytes = 16 * 1024 // 16 KB
@@ -28,7 +28,7 @@ type Config struct {
 	AppConfig    *config.Config
 }
 
-// Server implements the HTTP API for Biblios Scanner.
+// Server implements the HTTP API for ISBN Bridge.
 type Server struct {
 	tokenMgr  *auth.TokenManager
 	verifier  *auth.Verifier
@@ -182,7 +182,7 @@ func (s *Server) handleGetQRHTML(w http.ResponseWriter, r *http.Request) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Biblios Token QR</title>
+  <title>ISBN Bridge Token QR</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding: 40px 20px; background: #f8fafc; color: #1e293b; }
     .card { background: white; max-width: 440px; margin: 0 auto; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }

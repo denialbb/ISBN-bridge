@@ -1,6 +1,6 @@
 # Mobile Client Setup (iOS & Android)
 
-This document describes how mobile scanning works with the Biblios pipeline, including iOS Shortcuts implementation and planned Android support.
+This document describes how mobile scanning works with the ISBN Bridge pipeline, including iOS Shortcuts implementation and planned Android support.
 
 ---
 
@@ -12,7 +12,7 @@ Scanning from an iPhone uses two lightweight, native Apple Shortcuts that requir
 *Used once when starting a scanning session or after token rotation.*
 
 1. **Scan QR/Bar Code**: Prompts camera to scan the centered QR code displayed on the desktop monitor.
-2. **Save File**: Writes the scanned token string to local storage (`Shortcuts/biblios_token.txt` in iCloud Drive / On My iPhone), overwriting any prior token.
+2. **Save File**: Writes the scanned token string to local storage (`Shortcuts/isbn_bridge_token.txt` in iCloud Drive / On My iPhone), overwriting any prior token.
 3. **Notification**: Emits a brief haptic/banner confirmation ("Token saved successfully").
 
 *(Official iCloud shortcut link will be added here)*
@@ -32,7 +32,7 @@ Scanning from an iPhone uses two lightweight, native Apple Shortcuts that requir
 │  2. Format Date (Current Date)                         │
 │     └─ Format: "yyyy-MM-dd HH:mm:ss"                   │
 │                                                        │
-│  3. Read File (Shortcuts/biblios_token.txt)            │
+│  3. Read File (Shortcuts/isbn_bridge_token.txt)            │
 │     └─ Retrieve secret token string                    │
 │                                                        │
 │  4. Combine Text Block                                 │

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/denialbb/biblios-scanner/pkg/auth"
+	"github.com/denialbb/isbn-bridge/pkg/auth"
 )
 
 type mockForwarder struct {

@@ -1,6 +1,6 @@
 # Security Architecture & Cryptographic Verification
 
-This document details the threat model, authentication protocol, and cryptographic measures implemented in the Biblios Scanner system.
+This document details the threat model, authentication protocol, and cryptographic measures implemented in the ISBN Bridge system.
 
 ---
 

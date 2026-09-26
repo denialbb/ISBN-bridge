@@ -1,6 +1,6 @@
-# Biblios Scanner & Auto-Paste
+# ISBN Bridge
 
-**Biblios Scanner** connects mobile barcode scanning to your PC. Scan book barcodes with your phone and have them verified, authenticated, and pasted directly into your desktop browser or cataloging tools in real-time.
+**ISBN Bridge** connects mobile barcode scanning to your PC. Scan book barcodes with your phone and have them verified, authenticated, and pasted directly into your desktop browser or cataloging tools in real-time.
 
 ---
 
@@ -72,7 +72,7 @@ For full setup instructions, see [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 ### 1. Start the Go Server
 ```powershell
 # Windows binary
-.\bin\biblios-server.exe
+.\bin\isbn-bridge.exe
 ```
 
 ### 2. Start the AutoHotkey Client

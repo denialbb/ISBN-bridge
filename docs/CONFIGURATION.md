@@ -1,6 +1,6 @@
 # Configuration Guide (`scanner.conf`)
 
-Biblios Scanner uses a single unified configuration file, [`scanner.conf`](file:///c:/Users/DanyB/OneDrive/Documenti/AutoHotkey/scanner.conf), shared between the Go backend server and the AutoHotkey desktop client.
+ISBN Bridge uses a single unified configuration file, [`scanner.conf`](file:///c:/Users/DanyB/OneDrive/Documenti/AutoHotkey/scanner.conf), shared between the Go backend server and the AutoHotkey desktop client.
 
 ---
 
@@ -66,7 +66,7 @@ The AutoHotkey taskbar tray icon provides live control over the configuration wi
 | **Mostra QR code al centro** | Manually displays the centered QR popup at any time. | Action |
 | **Reset token (Nuovo QR)** | Immediately rotates the token and shows the new QR code. | Action |
 | **Apri scanner.conf** | Opens `scanner.conf` directly in the default editor. | Action |
-| **Apri log debug** | Opens `biblios-debug.log` to inspect real-time events. | Action |
+| **Apri log debug** | Opens `isbn-bridge-debug.log` to inspect real-time events. | Action |
 
 ---
 

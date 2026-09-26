@@ -18,7 +18,7 @@ class PasteEngine {
 
         this.pendingISBN := isbn
         FollowToolTip.Show("ISBN pronto: " isbn "`nClicca nel campo di testo per incollarlo.`nESC per annullare.")
-        TrayTip("ISBN pronto: " isbn, "Biblios")
+        TrayTip("ISBN pronto: " isbn, "ISBN Bridge")
     }
 
     static HandleLeftClick() {

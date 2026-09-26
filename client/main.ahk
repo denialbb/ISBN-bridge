@@ -25,7 +25,7 @@ if !HttpListener.Start(AppConfig.httpPort) {
     MsgBox(
         "Impossibile avviare il listener AutoHotkey sulla porta " AppConfig.httpPort ".`n`n"
         "La porta potrebbe essere già in uso.",
-        "Biblios",
+        "ISBN Bridge",
         "Iconx"
     )
     ExitApp()
@@ -38,4 +38,4 @@ TrayManager.Init()
 Hotkey("~LButton", (*) => PasteEngine.HandleLeftClick())
 Hotkey("~Esc", (*) => (PasteEngine.Cancel(), QRModal.Hide()))
 
-TrayTip("Client Biblios attivo (Porta: " AppConfig.httpPort ")", "Biblios")
+TrayTip("Client ISBN Bridge attivo (Porta: " AppConfig.httpPort ")", "ISBN Bridge")

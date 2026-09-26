@@ -12,9 +12,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/denialbb/biblios-scanner/pkg/auth"
-	"github.com/denialbb/biblios-scanner/pkg/config"
-	"github.com/denialbb/biblios-scanner/pkg/server"
+	"github.com/denialbb/isbn-bridge/pkg/auth"
+	"github.com/denialbb/isbn-bridge/pkg/config"
+	"github.com/denialbb/isbn-bridge/pkg/server"
 )
 
 func main() {
@@ -26,7 +26,7 @@ func main() {
 	flag.Parse()
 
 	log.Println("==================================================")
-	log.Println("           BIBLIOS SCANNER GO SERVER              ")
+	log.Println("             ISBN BRIDGE GO SERVER                ")
 	log.Println("==================================================")
 
 	// 1. Load or create scanner.conf
@@ -134,7 +134,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down Biblios server...")
+	log.Println("Shutting down ISBN Bridge server...")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
