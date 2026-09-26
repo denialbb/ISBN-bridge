@@ -18,30 +18,66 @@ High-performance, secure ISBN scanner pipeline connecting iOS Shortcuts, a Go va
                  ▼
 ┌─────────────────────────────────┐
 │     Go Server (:8765)           │
-│  - Token Manager (1h expiry)    │
+│  - Token Manager (Config TTL)   │
 │  - Terminal & Web QR (/qr)      │
 │  - SHA-256 Signature Verifier   │
 │  - ISBN Checksum Validator      │
 └────────────────┬────────────────┘
                  │
-                 │ HTTP POST /paste (localhost only)
+                 │ HTTP POST /paste, /qr/show, /qr/hide (localhost)
                  │ Body: <Normalized ISBN>
                  ▼
 ┌─────────────────────────────────┐
 │     AutoHotkey Client (:8766)   │
-│  - Window/Tab Title Matcher     │
-│  - I-Beam Cursor Textbox Focus  │
-│  - Auto-select & Paste (^A ^V)  │
+│  - Centered Frameless QR Popup  │
+│  - Zero-Click Hover Auto-Paste  │
+│  - Tactile Tap Audio Feedback   │
+│  - Taskbar Icon Menu & Options  │
 └─────────────────────────────────┘
 ```
 
-## Security & Verification
+## Features
 
-1. **Token Rotation**: Tokens are 48-character cryptographically secure random alphanumeric strings, automatically rotating every hour.
-2. **SHA-256 Signature**: The iOS client hashes `ISBN|timestamp|token`. The server computes the expected hash in constant time.
-3. **Replay Protection**: The `Timestamp` header is verified against server time (max skew: 15 minutes).
-4. **Zero-Secret Exposure**: The token is never transmitted over the wire during ISBN scanning—only the one-time cryptographic hash.
-5. **QR Code Pairing**: Whenever a token rotates or on server startup, a scannable QR code is rendered directly in the terminal and on `http://<PC_IP>:8765/qr`.
+1. **Seamless Centered QR Popup**:
+   - Appears automatically in the exact center of the screen on server startup or token rotation.
+   - Clean, modern, borderless card with token expiration info.
+   - Dismisses automatically as soon as an iPhone scans an ISBN, or by clicking / pressing `ESC`.
+2. **Unified Configuration (`scanner.conf`)**:
+   - Single file containing all ports, timings, audio, visual, and pasting options.
+   - Automatically loaded and updated by both the Go server and AutoHotkey.
+3. **Taskbar Tray Options**:
+   - **Scadenza token**: Submenu allowing on-the-fly selection of token lifespan (15m, 30m, 1h, 2h, 12h, 24h) with live radio checkmarks and automatic Go server sync.
+   - **Sovrascrivi testo (Ctrl+A)**: Checkbox to toggle auto-select before paste.
+   - **Auto-incolla al passaggio (senza clic)**: Inserts ISBN automatically if mouse is already hovering over an input field.
+   - **Suono al tocco (Tap)**: Crisp tactile audio feedback.
+   - **Mostra QR code al centro**: Opens the centered QR overlay on demand.
+4. **Security & Cryptographic Verification**:
+   - iOS generates `SHA256(ISBN|timestamp|token)`.
+   - Go server computes and validates the hash in constant time (`subtle.ConstantTimeCompare`).
+   - Timestamps protect against replay attacks.
+
+## Unified Configuration (`scanner.conf`)
+
+```ini
+[Server]
+port = 8765
+ahk_port = 8766
+token_ttl_minutes = 60
+max_timestamp_skew_minutes = 15
+
+[AutoPaste]
+target_tab_title = hardcover
+overwrite_existing_text = true
+auto_paste_on_hover = true
+play_tap_sound = true
+tooltip_offset_x = 10
+tooltip_offset_y = 12
+
+[QRCode]
+auto_show_on_refresh = true
+auto_hide_seconds = 45
+popup_size = 280
+```
 
 ## Getting Started
 
@@ -54,33 +90,26 @@ go test -v ./...
 # Run the server directly
 go run ./cmd/server
 
-# Or build binaries (Windows .exe or Linux)
-go build -o bin/biblios-server.exe ./cmd/server
+# Or run the native Windows binary
+.\bin\biblios-server.exe
 ```
-
-**Server Flags:**
-- `-port` (default: `8765`): HTTP port for iOS Shortcuts.
-- `-ahk` (default: `http://127.0.0.1:8766/paste`): Local AutoHotkey listener URL.
-- `-token-file` (default: `token.txt`): File to persist active token.
-- `-ttl` (default: `1h`): Token validity duration before rotation.
-- `-max-skew` (default: `15m`): Maximum timestamp drift allowed.
-- `-no-terminal-qr`: Disable printing ANSI QR code to terminal.
 
 ### 2. Run the AutoHotkey Client
 
 Run `ISBN scan/ISBN paste.ahk` using AutoHotkey v2:
-- Listens on `http://127.0.0.1:8766/paste` for verified ISBNs from Go.
-- Shows follow-cursor tooltip and pastes into browser tab matching `hardcover`.
+```powershell
+& "ISBN scan\ISBN paste.ahk"
+```
 
 ### 3. iOS Shortcuts Setup
 
 #### A. Token Updater Shortcut
-- Scans QR code from the server terminal or `http://<PC_IP>:8765/qr`.
-- Saves the scanned text to local storage (or a Shortcut variable).
+- Scans the centered QR code shown on your monitor (or from `http://<PC_IP>:8765/qr`).
+- Saves the token text to local storage.
 
 #### B. Scanner Shortcut
 1. **Scan QR/Bar Code**
-2. **Format Date** (Current Date) -> store in `[Timestamp]`
+2. **Format Date** (`Current Date`) -> `[Timestamp]`
 3. **Get File from Storage** (retrieve active token) -> `[Token]`
 4. **Text block**: `[QR/Bar Code]|[Timestamp]|[Token]`
 5. **Generate SHA-256**: Hash the text block with SHA-256.

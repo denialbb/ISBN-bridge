@@ -5,36 +5,60 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
-// Forwarder defines the contract for sending validated ISBNs to an external recipient (e.g. AutoHotkey).
+// Forwarder defines the contract for communicating with AutoHotkey.
 type Forwarder interface {
 	Forward(ctx context.Context, isbn string) error
+	ShowQR(ctx context.Context) error
+	HideQR(ctx context.Context) error
 }
 
-// AHKForwarder sends validated ISBNs via HTTP POST to the local AutoHotkey script.
+// AHKForwarder sends actions to the local AutoHotkey script via HTTP.
 type AHKForwarder struct {
-	url    string
-	client *http.Client
+	baseURL string
+	client  *http.Client
 }
 
-// NewAHKForwarder creates a new AHKForwarder targeting the given URL.
-func NewAHKForwarder(targetURL string) *AHKForwarder {
-	if targetURL == "" {
-		targetURL = "http://127.0.0.1:8766/paste"
+// NewAHKForwarder creates a new AHKForwarder targeting the given base URL or port.
+func NewAHKForwarder(target string) *AHKForwarder {
+	if target == "" {
+		target = "http://127.0.0.1:8766"
 	}
+	if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
+		target = "http://127.0.0.1:" + target
+	}
+	target = strings.TrimSuffix(target, "/")
+	target = strings.TrimSuffix(target, "/paste")
+
 	return &AHKForwarder{
-		url: targetURL,
+		baseURL: target,
 		client: &http.Client{
-			Timeout: 3 * time.Second,
+			Timeout: 2 * time.Second,
 		},
 	}
 }
 
-// Forward delivers the ISBN to the local AutoHotkey listener.
+// Forward delivers the validated ISBN to the local AutoHotkey listener.
 func (f *AHKForwarder) Forward(ctx context.Context, isbn string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, f.url, bytes.NewBufferString(isbn))
+	return f.post(ctx, "/paste", isbn)
+}
+
+// ShowQR instructs AutoHotkey to pop up the seamless centered QR code.
+func (f *AHKForwarder) ShowQR(ctx context.Context) error {
+	return f.post(ctx, "/qr/show", "")
+}
+
+// HideQR instructs AutoHotkey to dismiss the centered QR code (e.g. after successful scan).
+func (f *AHKForwarder) HideQR(ctx context.Context) error {
+	return f.post(ctx, "/qr/hide", "")
+}
+
+func (f *AHKForwarder) post(ctx context.Context, path, body string) error {
+	url := f.baseURL + path
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBufferString(body))
 	if err != nil {
 		return err
 	}
@@ -42,12 +66,12 @@ func (f *AHKForwarder) Forward(ctx context.Context, isbn string) error {
 
 	resp, err := f.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to forward ISBN to AutoHotkey at %s: %w", f.url, err)
+		return fmt.Errorf("failed to contact AutoHotkey at %s: %w", url, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("AutoHotkey returned status %d", resp.StatusCode)
+		return fmt.Errorf("AutoHotkey returned status %d for %s", resp.StatusCode, path)
 	}
 	return nil
 }

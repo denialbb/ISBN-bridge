@@ -19,6 +19,8 @@ type mockForwarder struct {
 	mu            sync.Mutex
 	forwardedISBN string
 	forwardCount  int
+	showQRCount   int
+	hideQRCount   int
 }
 
 func (m *mockForwarder) Forward(ctx context.Context, isbn string) error {
@@ -26,6 +28,20 @@ func (m *mockForwarder) Forward(ctx context.Context, isbn string) error {
 	defer m.mu.Unlock()
 	m.forwardedISBN = isbn
 	m.forwardCount++
+	return nil
+}
+
+func (m *mockForwarder) ShowQR(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.showQRCount++
+	return nil
+}
+
+func (m *mockForwarder) HideQR(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.hideQRCount++
 	return nil
 }
 

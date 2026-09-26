@@ -92,6 +92,22 @@ func (m *TokenManager) IsExpired() bool {
 	return time.Since(m.createdAt) >= m.ttl
 }
 
+// SetTTL updates the token lifespan dynamically.
+func (m *TokenManager) SetTTL(ttl time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if ttl > 0 {
+		m.ttl = ttl
+	}
+}
+
+// TTL returns the current token lifespan.
+func (m *TokenManager) TTL() time.Duration {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.ttl
+}
+
 // CurrentToken returns the currently stored token without refreshing it.
 func (m *TokenManager) CurrentToken() string {
 	m.mu.RLock()

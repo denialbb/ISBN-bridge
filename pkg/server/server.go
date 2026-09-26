@@ -1,16 +1,19 @@
 package server
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/denialbb/biblios-scanner/pkg/auth"
+	"github.com/denialbb/biblios-scanner/pkg/config"
 	"github.com/denialbb/biblios-scanner/pkg/isbn"
 )
 
@@ -22,6 +25,7 @@ type Config struct {
 	Verifier     *auth.Verifier
 	Forwarder    Forwarder
 	Port         int
+	AppConfig    *config.Config
 }
 
 // Server implements the HTTP API for Biblios Scanner.
@@ -29,6 +33,7 @@ type Server struct {
 	tokenMgr  *auth.TokenManager
 	verifier  *auth.Verifier
 	forwarder Forwarder
+	appConfig *config.Config
 	port      int
 	mux       *http.ServeMux
 }
@@ -43,6 +48,7 @@ func NewServer(cfg Config) *Server {
 		tokenMgr:  cfg.TokenManager,
 		verifier:  cfg.Verifier,
 		forwarder: cfg.Forwarder,
+		appConfig: cfg.AppConfig,
 		port:      cfg.Port,
 		mux:       http.NewServeMux(),
 	}
@@ -65,7 +71,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /isbn", s.handlePostISBN)
 	s.mux.HandleFunc("GET /qr", s.handleGetQRHTML)
 	s.mux.HandleFunc("GET /qr.png", s.handleGetQRPNG)
+	s.mux.HandleFunc("POST /qr/show", s.handleShowQR)
 	s.mux.HandleFunc("POST /token/refresh", s.handleRefreshToken)
+	s.mux.HandleFunc("POST /token/ttl", s.handleSetTTL)
 	s.mux.HandleFunc("GET /health", s.handleHealth)
 	s.mux.HandleFunc("GET /", s.handleRoot)
 }
@@ -122,8 +130,11 @@ func (s *Server) handlePostISBN(w http.ResponseWriter, r *http.Request) {
 	if s.forwarder != nil {
 		if err := s.forwarder.Forward(r.Context(), normalizedISBN); err != nil {
 			log.Printf("Warning: failed to forward to AutoHotkey: %v", err)
-			// We still respond OK or 202 to the phone because the ISBN was validly received
 		}
+		// Dismiss the QR code automatically on scan
+		go func() {
+			_ = s.forwarder.HideQR(context.Background())
+		}()
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -142,6 +153,17 @@ func (s *Server) handleGetQRPNG(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.WriteHeader(http.StatusOK)
 	w.Write(png)
+}
+
+func (s *Server) handleShowQR(w http.ResponseWriter, r *http.Request) {
+	if s.forwarder != nil {
+		if err := s.forwarder.ShowQR(r.Context()); err != nil {
+			log.Printf("Notice: AutoHotkey ShowQR call failed: %v", err)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "shown"})
 }
 
 func (s *Server) handleGetQRHTML(w http.ResponseWriter, r *http.Request) {
@@ -196,7 +218,13 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Token manually refreshed: %s", newToken)
+	log.Printf("Token refreshed: %s", newToken)
+
+	if s.forwarder != nil {
+		go func() {
+			_ = s.forwarder.ShowQR(context.Background())
+		}()
+	}
 
 	// If form submission from browser, redirect back to /qr
 	if strings.Contains(r.Header.Get("Accept"), "text/html") {
@@ -211,11 +239,53 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleSetTTL(w http.ResponseWriter, r *http.Request) {
+	minutesStr := r.URL.Query().Get("minutes")
+	if minutesStr == "" {
+		minutesStr = r.FormValue("minutes")
+	}
+
+	mins, err := strconv.Atoi(minutesStr)
+	if err != nil || mins <= 0 {
+		http.Error(w, "Invalid or missing minutes parameter", http.StatusBadRequest)
+		return
+	}
+
+	ttl := time.Duration(mins) * time.Minute
+	s.tokenMgr.SetTTL(ttl)
+
+	if s.appConfig != nil {
+		_ = s.appConfig.SetTokenTTL(ttl)
+	}
+
+	newToken, err := s.tokenMgr.RefreshToken()
+	if err != nil {
+		http.Error(w, "Failed to refresh token with new TTL: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Token TTL updated to %d minutes. New token: %s", mins, newToken)
+
+	if s.forwarder != nil {
+		go func() {
+			_ = s.forwarder.ShowQR(context.Background())
+		}()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":      "ok",
+		"ttl_minutes": mins,
+		"token":       newToken,
+	})
+}
+
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"status":      "ok",
 		"expired":     s.tokenMgr.IsExpired(),
+		"ttl_minutes": int(s.tokenMgr.TTL().Minutes()),
 		"server_time": time.Now().Format(time.RFC3339),
 	})
 }

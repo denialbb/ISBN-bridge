@@ -6,24 +6,79 @@ CoordMode("ToolTip", "Screen")
 CoordMode("Mouse", "Screen")
 
 ; ============================================================
-; Biblios ISBN Auto-Paste
+; Biblios ISBN Auto-Paste Client
 ; ============================================================
 
 ; ----------------------------
-; Configuration
+; Configuration loading (scanner.conf)
 ; ----------------------------
 
-global TARGET_TAB_TITLE := "hardcover"
-global HTTP_PORT := 8766
-global GO_SERVER_URL := "http://127.0.0.1:8765"
+global CONF_FILE := FindConfigFile()
 
-; Options
+FindConfigFile() {
+    if FileExist(A_ScriptDir "\scanner.conf")
+        return A_ScriptDir "\scanner.conf"
+    if FileExist(A_ScriptDir "\..\scanner.conf")
+        return A_ScriptDir "\..\scanner.conf"
+    return A_ScriptDir "\scanner.conf"
+}
+
+; Server & Connection settings
+global HTTP_PORT := 8766
+global GO_PORT := 8765
+global GO_SERVER_URL := "http://127.0.0.1:8765"
+global tokenTTLMinutes := 60
+
+; AutoPaste settings
+global TARGET_TAB_TITLE := "hardcover"
 global overwriteExistingText := true
+global autoPasteOnHover := true
 global playTapSoundEnabled := true
 global TOOLTIP_OFFSET_X := 10
 global TOOLTIP_OFFSET_Y := 12
 
-; Replace this with your actual token or use 'Generate Token.ahk'
+; QR Code settings
+global qrAutoShowOnRefresh := true
+global qrAutoHideSeconds := 45
+global qrPopupSize := 280
+
+LoadConfig()
+
+LoadConfig() {
+    global CONF_FILE
+    global HTTP_PORT
+    global GO_PORT
+    global GO_SERVER_URL
+    global tokenTTLMinutes
+    global TARGET_TAB_TITLE
+    global overwriteExistingText
+    global autoPasteOnHover
+    global playTapSoundEnabled
+    global TOOLTIP_OFFSET_X
+    global TOOLTIP_OFFSET_Y
+    global qrAutoShowOnRefresh
+    global qrAutoHideSeconds
+    global qrPopupSize
+
+    HTTP_PORT := Integer(IniRead(CONF_FILE, "Server", "ahk_port", 8766))
+    GO_PORT := Integer(IniRead(CONF_FILE, "Server", "port", 8765))
+    GO_SERVER_URL := "http://127.0.0.1:" GO_PORT
+    tokenTTLMinutes := Integer(IniRead(CONF_FILE, "Server", "token_ttl_minutes", 60))
+
+    TARGET_TAB_TITLE := IniRead(CONF_FILE, "AutoPaste", "target_tab_title", "hardcover")
+    overwriteExistingText := (IniRead(CONF_FILE, "AutoPaste", "overwrite_existing_text", "true") = "true")
+    autoPasteOnHover := (IniRead(CONF_FILE, "AutoPaste", "auto_paste_on_hover", "true") = "true")
+    playTapSoundEnabled := (IniRead(CONF_FILE, "AutoPaste", "play_tap_sound", "true") = "true")
+
+    TOOLTIP_OFFSET_X := Integer(IniRead(CONF_FILE, "AutoPaste", "tooltip_offset_x", 10))
+    TOOLTIP_OFFSET_Y := Integer(IniRead(CONF_FILE, "AutoPaste", "tooltip_offset_y", 12))
+
+    qrAutoShowOnRefresh := (IniRead(CONF_FILE, "QRCode", "auto_show_on_refresh", "true") = "true")
+    qrAutoHideSeconds := Integer(IniRead(CONF_FILE, "QRCode", "auto_hide_seconds", 45))
+    qrPopupSize := Integer(IniRead(CONF_FILE, "QRCode", "popup_size", 280))
+}
+
+; Token storage (for legacy direct connections)
 global TOKEN_FILE := A_ScriptDir "\token.txt"
 global BIBLIOS_TOKEN := "XJHNiW2BsqPCyAl7h4TxZwLrMme9Yt3EUdK8bgO1zkQFc6Da"
 if FileExist(TOKEN_FILE) {
@@ -48,9 +103,12 @@ global tipHwnd := 0
 global lastX := -1
 global lastY := -1
 
+global qrGui := 0
+
 global serverSocket := 0
 global clientStates := Map()
 global winsockStarted := false
+global expiryMenu := Menu()
 
 
 ; ============================================================
@@ -70,7 +128,7 @@ if !StartWinsock() {
 
 if !StartHttpServer() {
     MsgBox(
-        "Impossibile avviare il server HTTP sulla porta "
+        "Impossibile avviare il listener AutoHotkey sulla porta "
         HTTP_PORT ".`n`n"
         "La porta potrebbe essere già in uso.",
         "Biblios",
@@ -81,75 +139,63 @@ if !StartHttpServer() {
 
 OnClipboardChange(ClipChanged)
 
-; Poll the non-blocking sockets.
+; Poll non-blocking sockets
 SetTimer(PollSockets, 25)
 
-; Check mouse clicks.
+; Check mouse clicks
 Hotkey("~LButton", HandleLeftClick)
 
-; ESC cancels the pending ISBN.
-Hotkey("~Esc", CancelISBN)
+; ESC cancels pending ISBN and dismisses QR
+Hotkey("~Esc", HandleEscapeKey)
 
 CreateTrayMenu()
 
 TrayTip(
-    "Server HTTP attivo sulla porta " HTTP_PORT,
+    "Client Biblios attivo (Porta: " HTTP_PORT ")",
     "Biblios"
 )
 
 
 ; ============================================================
-; Tray menu
+; Tray menu & User Options
 ; ============================================================
 
 CreateTrayMenu() {
+    global expiryMenu
+
     A_TrayMenu.Delete()
 
-    A_TrayMenu.Add(
-        "Attivo",
-        ToggleEnabled
-    )
-
+    A_TrayMenu.Add("Attivo", ToggleEnabled)
     A_TrayMenu.Add()
 
-    A_TrayMenu.Add(
-        "Sovrascrivi testo (Ctrl+A)",
-        ToggleOverwrite
-    )
+    ; --- Submenu: Expiry Duration ---
+    expiryMenu := Menu()
+    expiryMenu.Add("15 minuti", (*) => SetExpiryOption(15))
+    expiryMenu.Add("30 minuti", (*) => SetExpiryOption(30))
+    expiryMenu.Add("1 ora (60 min)", (*) => SetExpiryOption(60))
+    expiryMenu.Add("2 ore (120 min)", (*) => SetExpiryOption(120))
+    expiryMenu.Add("12 ore (720 min)", (*) => SetExpiryOption(720))
+    expiryMenu.Add("24 ore (1440 min)", (*) => SetExpiryOption(1440))
 
-    A_TrayMenu.Add(
-        "Suono al tocco (Tap)",
-        ToggleSound
-    )
-
+    A_TrayMenu.Add("Scadenza token", expiryMenu)
     A_TrayMenu.Add()
 
-    A_TrayMenu.Add(
-        "Reset token (Nuovo QR)",
-        ResetToken
-    )
-
-    A_TrayMenu.Add(
-        "Apri pagina QR nel browser",
-        OpenQRPage
-    )
-
-    A_TrayMenu.Add(
-        "Svuota ISBN",
-        CancelISBN
-    )
-
-    A_TrayMenu.Add(
-        "Apri log debug",
-        OpenDebugLog
-    )
-
+    ; --- Options ---
+    A_TrayMenu.Add("Sovrascrivi testo (Ctrl+A)", ToggleOverwrite)
+    A_TrayMenu.Add("Auto-incolla al passaggio (senza clic)", ToggleAutoHover)
+    A_TrayMenu.Add("Suono al tocco (Tap)", ToggleSound)
+    A_TrayMenu.Add("Mostra QR code al cambio token", ToggleAutoQR)
     A_TrayMenu.Add()
 
-    A_TrayMenu.Add(
-        "Esci",
-        (*) => ExitApp()
-    )
+    ; --- Actions ---
+    A_TrayMenu.Add("Mostra QR code al centro", ShowCenteredQR)
+    A_TrayMenu.Add("Reset token (Nuovo QR)", ResetToken)
+    A_TrayMenu.Add("Apri scanner.conf", (*) => Run(CONF_FILE))
+    A_TrayMenu.Add("Svuota ISBN in sospeso", CancelISBN)
+    A_TrayMenu.Add("Apri log debug", OpenDebugLog)
+    A_TrayMenu.Add()
+
+    A_TrayMenu.Add("Esci", (*) => ExitApp())
 
     UpdateTrayState()
 }
@@ -162,28 +208,39 @@ ToggleEnabled(*) {
     UpdateTrayState()
 
     if enabled {
-        TrayTip(
-            "Auto-incolla attivo.",
-            "Biblios"
-        )
+        TrayTip("Auto-incolla attivo.", "Biblios")
     } else {
         CancelISBN()
-        TrayTip(
-            "Auto-incolla disattivato.",
-            "Biblios"
-        )
+        TrayTip("Auto-incolla disattivato.", "Biblios")
     }
 }
 
 
 ToggleOverwrite(*) {
     global overwriteExistingText
+    global CONF_FILE
 
     overwriteExistingText := !overwriteExistingText
+    IniWrite(overwriteExistingText ? "true" : "false", CONF_FILE, "AutoPaste", "overwrite_existing_text")
     UpdateTrayState()
 
     TrayTip(
-        overwriteExistingText ? "Sovrascrittura testo attiva." : "Sovrascrittura testo disattivata.",
+        overwriteExistingText ? "Sovrascrittura testo attiva (Ctrl+A)." : "Sovrascrittura testo disattivata.",
+        "Biblios"
+    )
+}
+
+
+ToggleAutoHover(*) {
+    global autoPasteOnHover
+    global CONF_FILE
+
+    autoPasteOnHover := !autoPasteOnHover
+    IniWrite(autoPasteOnHover ? "true" : "false", CONF_FILE, "AutoPaste", "auto_paste_on_hover")
+    UpdateTrayState()
+
+    TrayTip(
+        autoPasteOnHover ? "Auto-incolla al passaggio attivo (senza clic)." : "Auto-incolla al passaggio disattivato.",
         "Biblios"
     )
 }
@@ -191,14 +248,48 @@ ToggleOverwrite(*) {
 
 ToggleSound(*) {
     global playTapSoundEnabled
+    global CONF_FILE
 
     playTapSoundEnabled := !playTapSoundEnabled
+    IniWrite(playTapSoundEnabled ? "true" : "false", CONF_FILE, "AutoPaste", "play_tap_sound")
     UpdateTrayState()
 
     TrayTip(
         playTapSoundEnabled ? "Suono al tocco attivo." : "Suono al tocco disattivato.",
         "Biblios"
     )
+}
+
+
+ToggleAutoQR(*) {
+    global qrAutoShowOnRefresh
+    global CONF_FILE
+
+    qrAutoShowOnRefresh := !qrAutoShowOnRefresh
+    IniWrite(qrAutoShowOnRefresh ? "true" : "false", CONF_FILE, "QRCode", "auto_show_on_refresh")
+    UpdateTrayState()
+}
+
+
+SetExpiryOption(minutes) {
+    global tokenTTLMinutes
+    global CONF_FILE
+    global GO_SERVER_URL
+
+    tokenTTLMinutes := minutes
+    IniWrite(String(minutes), CONF_FILE, "Server", "token_ttl_minutes")
+    UpdateTrayState()
+
+    try {
+        req := ComObject("MSXML2.XMLHTTP")
+        req.open("POST", GO_SERVER_URL "/token/ttl?minutes=" minutes, false)
+        req.send()
+
+        TrayTip("Scadenza token aggiornata a " minutes " minuti!`nNuovo QR code generato.", "Biblios")
+        ShowCenteredQR()
+    } catch as err {
+        TrayTip("Scadenza salvata nel file di configurazione.", "Biblios")
+    }
 }
 
 
@@ -211,19 +302,8 @@ ResetToken(*) {
         req.setRequestHeader("Accept", "application/json")
         req.send()
 
-        if (req.status = 200 || req.status = 303) {
-            TrayTip(
-                "Token reimpostato con successo!`nNuovo QR generato.",
-                "Biblios"
-            )
-            Run(GO_SERVER_URL "/qr")
-        } else {
-            TrayTip(
-                "Errore server Go: " req.status,
-                "Biblios",
-                "Iconx"
-            )
-        }
+        TrayTip("Token reimpostato con successo!`nNuovo QR generato.", "Biblios")
+        ShowCenteredQR()
     } catch as err {
         tokenScript := A_ScriptDir "\Generate Token.ahk"
         if FileExist(tokenScript) {
@@ -239,16 +319,14 @@ ResetToken(*) {
 }
 
 
-OpenQRPage(*) {
-    global GO_SERVER_URL
-    Run(GO_SERVER_URL "/qr")
-}
-
-
 UpdateTrayState() {
     global enabled
     global overwriteExistingText
+    global autoPasteOnHover
     global playTapSoundEnabled
+    global qrAutoShowOnRefresh
+    global tokenTTLMinutes
+    global expiryMenu
 
     A_TrayMenu.Uncheck("Attivo")
     if enabled
@@ -258,19 +336,109 @@ UpdateTrayState() {
     if overwriteExistingText
         A_TrayMenu.Check("Sovrascrivi testo (Ctrl+A)")
 
+    A_TrayMenu.Uncheck("Auto-incolla al passaggio (senza clic)")
+    if autoPasteOnHover
+        A_TrayMenu.Check("Auto-incolla al passaggio (senza clic)")
+
     A_TrayMenu.Uncheck("Suono al tocco (Tap)")
     if playTapSoundEnabled
         A_TrayMenu.Check("Suono al tocco (Tap)")
+
+    A_TrayMenu.Uncheck("Mostra QR code al cambio token")
+    if qrAutoShowOnRefresh
+        A_TrayMenu.Check("Mostra QR code al cambio token")
+
+    ; Update Expiry Submenu checks
+    expiryOptions := [15, 30, 60, 120, 720, 1440]
+    expiryLabels := ["15 minuti", "30 minuti", "1 ora (60 min)", "2 ore (120 min)", "12 ore (720 min)", "24 ore (1440 min)"]
+
+    Loop expiryOptions.Length {
+        opt := expiryOptions[A_Index]
+        label := expiryLabels[A_Index]
+        expiryMenu.Uncheck(label)
+        if (tokenTTLMinutes = opt)
+            expiryMenu.Check(label)
+    }
 }
 
 
 OpenDebugLog(*) {
     global DEBUG_LOG
-
     if !FileExist(DEBUG_LOG)
         FileAppend("", DEBUG_LOG, "UTF-8")
-
     Run(DEBUG_LOG)
+}
+
+
+HandleEscapeKey(*) {
+    CancelISBN()
+    HideCenteredQR()
+}
+
+
+; ============================================================
+; Centered Seamless QR Code Overlay
+; ============================================================
+
+ShowCenteredQR(*) {
+    global qrGui
+    global GO_SERVER_URL
+    global qrPopupSize
+    global qrAutoHideSeconds
+    global tokenTTLMinutes
+
+    tempQR := A_Temp "\biblios_qr.png"
+    try {
+        Download(GO_SERVER_URL "/qr.png", tempQR)
+    } catch as err {
+        TrayTip("Impossibile scaricare il QR code dal server Go.", "Biblios", "Iconx")
+        return
+    }
+
+    HideCenteredQR()
+
+    qrGui := Gui("+AlwaysOnTop -Caption +Border +ToolWindow", "Biblios Token")
+    qrGui.BackColor := "0xFFFFFF"
+    qrGui.MarginX := 24
+    qrGui.MarginY := 20
+
+    ; Header
+    qrGui.SetFont("s13 bold c0f172a", "Segoe UI")
+    qrGui.Add("Text", "Center w" qrPopupSize, "Scansiona Token Biblios")
+
+    qrGui.SetFont("s9 norm c64748b", "Segoe UI")
+    qrGui.Add("Text", "Center w" qrPopupSize " y+4", "Inquadra con l'iPhone per abbinare il comando")
+
+    ; QR Image in center
+    imgCtrl := qrGui.Add("Picture", "w" qrPopupSize " h" qrPopupSize " Center y+14", tempQR)
+    imgCtrl.OnEvent("Click", (*) => HideCenteredQR())
+
+    ; Expiry badge
+    qrGui.SetFont("s9 bold c2563eb", "Segoe UI")
+    ttlText := (tokenTTLMinutes >= 60) ? (Round(tokenTTLMinutes / 60, 1) " ore") : (tokenTTLMinutes " minuti")
+    qrGui.Add("Text", "Center w" qrPopupSize " y+12", "Validità token: " ttlText)
+
+    ; Subtle hint
+    qrGui.SetFont("s8 norm c94a3b8", "Segoe UI")
+    qrGui.Add("Text", "Center w" qrPopupSize " y+4", "Fai clic sul QR o premi ESC per chiudere")
+
+    qrGui.OnEvent("Escape", (*) => HideCenteredQR())
+    qrGui.OnEvent("Close", (*) => HideCenteredQR())
+
+    qrGui.Show("Center")
+
+    ; Auto-dismiss timer
+    if (qrAutoHideSeconds > 0)
+        SetTimer(HideCenteredQR, -qrAutoHideSeconds * 1000)
+}
+
+HideCenteredQR(*) {
+    global qrGui
+    SetTimer(HideCenteredQR, 0)
+    if qrGui {
+        qrGui.Destroy()
+        qrGui := 0
+    }
 }
 
 
@@ -300,10 +468,7 @@ ClipChanged(DataType) {
 
 NormalizeISBN(value) {
     value := Trim(value)
-
-    ; Remove spaces and hyphens.
     value := RegExReplace(value, "[\s-]", "")
-
     return StrUpper(value)
 }
 
@@ -312,37 +477,29 @@ IsISBNFormatValid(isbn) {
     ; ISBN-13
     if RegExMatch(isbn, "^\d{13}$") {
         sum := 0
-
         Loop 13 {
             digit := Integer(SubStr(isbn, A_Index, 1))
-
             if Mod(A_Index, 2)
                 sum += digit
             else
                 sum += digit * 3
         }
-
         return Mod(sum, 10) = 0
     }
 
     ; ISBN-10
     if RegExMatch(isbn, "^\d{9}[\dXx]$") {
         sum := 0
-
         Loop 9 {
             digit := Integer(SubStr(isbn, A_Index, 1))
             sum += digit * (11 - A_Index)
         }
-
         check := SubStr(isbn, 10, 1)
-
         if (check = "X" || check = "x")
             checkValue := 10
         else
             checkValue := Integer(check)
-
         sum += checkValue
-
         return Mod(sum, 11) = 0
     }
 
@@ -356,35 +513,35 @@ ArmISBN(isbn) {
     global lastX
     global lastY
     global TARGET_TAB_TITLE
+    global autoPasteOnHover
     global TOOLTIP_OFFSET_X
     global TOOLTIP_OFFSET_Y
 
-    ; Feature 1: If mouse is already hovering over an input field in the target window,
+    ; Feature: If mouse is already hovering over an input field in the target window,
     ; automatically insert the ISBN without requiring a click!
-    MouseGetPos(&mx, &my, &windowID)
-    title := ""
-    if windowID {
-        try title := WinGetTitle("ahk_id " windowID)
-    }
+    if autoPasteOnHover {
+        MouseGetPos(&mx, &my, &windowID)
+        title := ""
+        if windowID {
+            try title := WinGetTitle("ahk_id " windowID)
+        }
 
-    isTargetWindow := (TARGET_TAB_TITLE = "") || InStr(title, TARGET_TAB_TITLE, false)
-    isHoveringText := (A_Cursor = "IBeam")
+        isTargetWindow := (TARGET_TAB_TITLE = "") || InStr(title, TARGET_TAB_TITLE, false)
+        isHoveringText := (A_Cursor = "IBeam")
 
-    if (isTargetWindow && isHoveringText) {
-        AutoPasteHovered(isbn)
-        return
+        if (isTargetWindow && isHoveringText) {
+            AutoPasteHovered(isbn)
+            return
+        }
     }
 
     ; Otherwise, arm for manual click
     pendingISBN := isbn
-
-    ; Cancel any pending auto-hide timer from a previous paste.
     SetTimer(ClearToolTip, 0)
 
     lastX := mx
     lastY := my
 
-    ; Create the tooltip window once and store its HWND.
     tipHwnd := ToolTip(
         "ISBN pronto: " isbn "`n"
         "Clicca nel campo di testo per incollarlo.`n"
@@ -394,11 +551,7 @@ ArmISBN(isbn) {
     )
 
     SetTimer(UpdateFollowToolTip, 16)
-
-    TrayTip(
-        "ISBN pronto: " isbn,
-        "Biblios"
-    )
+    TrayTip("ISBN pronto: " isbn, "Biblios")
 }
 
 
@@ -440,16 +593,10 @@ AutoPasteHovered(isbn) {
         MouseGetPos(&mx, &my)
         ToolTip("ISBN incollato: " isbn, mx + TOOLTIP_OFFSET_X, my + TOOLTIP_OFFSET_Y)
 
-        SetTimer(
-            ClearToolTip,
-            -1200
-        )
+        SetTimer(ClearToolTip, -1200)
 
     } finally {
-        SetTimer(
-            ReleaseClipboardSuppression,
-            -300
-        )
+        SetTimer(ReleaseClipboardSuppression, -300)
     }
 }
 
@@ -476,8 +623,6 @@ UpdateFollowToolTip() {
     lastX := mx
     lastY := my
 
-    ; Move the existing tooltip window natively closer to the cursor.
-    ; 0x0015 = SWP_NOSIZE (0x0001) | SWP_NOZORDER (0x0004) | SWP_NOACTIVATE (0x0010)
     DllCall(
         "User32.dll\SetWindowPos",
         "Ptr", tipHwnd,
@@ -545,14 +690,12 @@ HandleLeftClick(*) {
     title := ""
     try title := WinGetTitle("ahk_id " windowID)
 
-    ; Case-insensitive check for TARGET_TAB_TITLE in the window/tab title.
     if (TARGET_TAB_TITLE != "") && !InStr(title, TARGET_TAB_TITLE, false)
         return
 
     wasIBeam := (A_Cursor = "IBeam")
     isbn := pendingISBN
 
-    ; Let the browser process the mouse click and focus the input field first.
     SetTimer(
         () => PastePendingISBN(isbn, wasIBeam),
         -100
@@ -570,18 +713,15 @@ PastePendingISBN(isbn, wasIBeam) {
     global TOOLTIP_OFFSET_X
     global TOOLTIP_OFFSET_Y
 
-    ; User may have cancelled or armed a new ISBN during the 100 ms delay.
     if (pendingISBN != isbn)
         return
 
-    ; Ensure the click landed inside a text input field (cursor was or became IBeam).
     if (!wasIBeam && A_Cursor != "IBeam")
         return
 
     suppressClipboard := true
 
     try {
-        ; Stop the follow timer before changing the tooltip text.
         SetTimer(UpdateFollowToolTip, 0)
         tipHwnd := 0
         lastX := -1
@@ -591,7 +731,6 @@ PastePendingISBN(isbn, wasIBeam) {
         A_Clipboard := isbn
         Sleep(40)
 
-        ; Select all existing text in the input box if overwrite is enabled.
         if overwriteExistingText {
             SendInput("^a")
             Sleep(25)
@@ -603,16 +742,10 @@ PastePendingISBN(isbn, wasIBeam) {
         MouseGetPos(&mx, &my)
         ToolTip("ISBN incollato: " isbn, mx + TOOLTIP_OFFSET_X, my + TOOLTIP_OFFSET_Y)
 
-        SetTimer(
-            ClearToolTip,
-            -1200
-        )
+        SetTimer(ClearToolTip, -1200)
 
     } finally {
-        SetTimer(
-            ReleaseClipboardSuppression,
-            -300
-        )
+        SetTimer(ReleaseClipboardSuppression, -300)
     }
 }
 
@@ -643,12 +776,11 @@ ReleaseClipboardSuppression() {
 
 
 ; ============================================================
-; Winsock
+; Winsock Local Listener
 ; ============================================================
 
 StartWinsock() {
     global winsockStarted
-
     wsadata := Buffer(512, 0)
 
     result := DllCall(
@@ -670,24 +802,18 @@ StartHttpServer() {
     global serverSocket
     global HTTP_PORT
 
-    ; AF_INET = 2
-    ; SOCK_STREAM = 1
-    ; IPPROTO_TCP = 6
-
     serverSocket := DllCall(
         "Ws2_32\socket",
-        "Int", 2,
-        "Int", 1,
-        "Int", 6,
+        "Int", 2, ; AF_INET
+        "Int", 1, ; SOCK_STREAM
+        "Int", 6, ; IPPROTO_TCP
         "Ptr"
     )
 
     if (serverSocket = -1)
         return false
 
-    ; Make listener non-blocking.
     mode := 1
-
     result := DllCall(
         "Ws2_32\ioctlsocket",
         "Ptr", serverSocket,
@@ -702,23 +828,12 @@ StartHttpServer() {
         return false
     }
 
-    ; sockaddr_in
     address := Buffer(16, 0)
+    NumPut("UShort", 2, address, 0) ; AF_INET
 
-    ; AF_INET
-    NumPut("UShort", 2, address, 0)
-
-    ; Port in network byte order.
-    networkPort := DllCall(
-        "Ws2_32\htons",
-        "UShort", HTTP_PORT,
-        "UShort"
-    )
-
+    networkPort := DllCall("Ws2_32\htons", "UShort", HTTP_PORT, "UShort")
     NumPut("UShort", networkPort, address, 2)
-
-    ; 0.0.0.0 = listen on all IPv4 interfaces.
-    NumPut("UInt", 0, address, 4)
+    NumPut("UInt", 0, address, 4) ; 0.0.0.0
 
     result := DllCall(
         "Ws2_32\bind",
@@ -747,17 +862,10 @@ StartHttpServer() {
         return false
     }
 
-    DebugLog(
-        "HTTP server started on 0.0.0.0:" HTTP_PORT
-    )
-
+    DebugLog("AutoHotkey local listener started on port " HTTP_PORT)
     return true
 }
 
-
-; ============================================================
-; Socket polling
-; ============================================================
 
 PollSockets() {
     global serverSocket
@@ -766,7 +874,6 @@ PollSockets() {
     if !serverSocket
         return
 
-    ; Accept all currently waiting clients.
     Loop {
         clientSocket := DllCall(
             "Ws2_32\accept",
@@ -779,9 +886,7 @@ PollSockets() {
         if (clientSocket = -1)
             break
 
-        ; Make client socket non-blocking.
         mode := 1
-
         result := DllCall(
             "Ws2_32\ioctlsocket",
             "Ptr", clientSocket,
@@ -801,15 +906,9 @@ PollSockets() {
             contentLength: 0,
             continueSent: false
         }
-
-        DebugLog(
-            "Accepted client socket: " clientSocket
-        )
     }
 
-    ; Process existing clients.
     sockets := []
-
     for socket, state in clientStates
         sockets.Push(socket)
 
@@ -827,7 +926,6 @@ PollClient(socket) {
         return
 
     state := clientStates[socket]
-
     recvBuffer := Buffer(4096, 0)
 
     Loop 4 {
@@ -840,245 +938,105 @@ PollClient(socket) {
             "Int"
         )
 
-        ; No data currently available.
         if (bytesReceived = -1) {
-            error := DllCall(
-                "Ws2_32\WSAGetLastError",
-                "Int"
-            )
-
-            ; WSAEWOULDBLOCK = 10035
-            if (error = 10035)
+            error := DllCall("Ws2_32\WSAGetLastError", "Int")
+            if (error = 10035) ; WSAEWOULDBLOCK
                 return
-
-            DebugLog(
-                "recv error: " error
-            )
-
             CloseClient(socket)
             return
         }
 
-        ; Client closed connection.
         if (bytesReceived = 0) {
-            DebugLog(
-                "Client closed socket: " socket
-            )
-
             CloseClient(socket)
             return
         }
 
-        chunk := StrGet(
-            recvBuffer.Ptr,
-            bytesReceived,
-            "UTF-8"
-        )
-
+        chunk := StrGet(recvBuffer.Ptr, bytesReceived, "UTF-8")
         state.data .= chunk
 
-        DebugLog(
-            "Socket " socket
-            " received " bytesReceived
-            " bytes"
-        )
-
         if (StrLen(state.data) > 16384) {
-            DebugLog("Request too large")
-            SendHttpResponse(
-                socket,
-                413,
-                "Payload Too Large",
-                "Request too large"
-            )
+            SendHttpResponse(socket, 413, "Payload Too Large", "Request too large")
             CloseClient(socket)
             return
         }
 
-        ; Wait until the complete HTTP header exists.
-        headerEnd := InStr(
-            state.data,
-            "`r`n`r`n"
-        )
-
+        headerEnd := InStr(state.data, "`r`n`r`n")
         if !headerEnd
             continue
 
         if !state.headersComplete {
-            headers := SubStr(
-                state.data,
-                1,
-                headerEnd + 3
-            )
-
+            headers := SubStr(state.data, 1, headerEnd + 3)
             state.headersComplete := true
 
-            if RegExMatch(
-                headers,
-                "im)^Content-Length:\s*(\d+)",
-                &lengthMatch
-            ) {
-                state.contentLength := Integer(
-                    lengthMatch[1]
-                )
-            } else {
+            if RegExMatch(headers, "im)^Content-Length:\s*(\d+)", &lengthMatch)
+                state.contentLength := Integer(lengthMatch[1])
+            else
                 state.contentLength := 0
-            }
 
-            DebugLog(
-                "Content-Length: "
-                state.contentLength
-            )
-
-            ; Handle HTTP 100-continue.
-            if RegExMatch(
-                headers,
-                "im)^Expect:\s*100-continue\s*$"
-            ) {
+            if RegExMatch(headers, "im)^Expect:\s*100-continue\s*$") {
                 if !state.continueSent {
-                    SendRaw(
-                        socket,
-                        "HTTP/1.1 100 Continue`r`n`r`n"
-                    )
-
+                    SendRaw(socket, "HTTP/1.1 100 Continue`r`n`r`n")
                     state.continueSent := true
-
-                    DebugLog(
-                        "Sent 100 Continue"
-                    )
                 }
             }
         }
 
-        ; Body begins after CRLFCRLF.
-        body := SubStr(
-            state.data,
-            headerEnd + 4
-        )
-
+        body := SubStr(state.data, headerEnd + 4)
         bodyLength := StrLen(body)
 
-        DebugLog(
-            "Body received: "
-            bodyLength
-            "/"
-            state.contentLength
-        )
-
-        ; Complete request.
         if (bodyLength >= state.contentLength) {
             request := state.data
-
-            DebugLog(
-                "Complete HTTP request received"
-            )
-
-            HandleHttpRequest(
-                socket,
-                request,
-                headerEnd,
-                state.contentLength
-            )
-
+            HandleHttpRequest(socket, request, headerEnd, state.contentLength)
             return
         }
     }
 }
 
 
-; ============================================================
-; HTTP request handling
-; ============================================================
-
-HandleHttpRequest(
-    socket,
-    request,
-    headerEnd,
-    contentLength
-) {
-    DebugLog("=== HANDLE REQUEST ===")
-    DebugLog("Request: [" request "]")
-
-    ; ----------------------------
-    ; Request line
-    ; ----------------------------
-
-    lineEnd := InStr(
-        request,
-        "`r`n"
-    )
-
+HandleHttpRequest(socket, request, headerEnd, contentLength) {
+    lineEnd := InStr(request, "`r`n")
     if !lineEnd {
-        SendHttpResponse(
-            socket,
-            400,
-            "Bad Request",
-            "Invalid HTTP request"
-        )
-
+        SendHttpResponse(socket, 400, "Bad Request", "Invalid HTTP request")
         CloseClient(socket)
         return
     }
 
-    requestLine := SubStr(
-        request,
-        1,
-        lineEnd - 1
-    )
+    requestLine := SubStr(request, 1, lineEnd - 1)
 
-    DebugLog(
-        "Request line: [" requestLine "]"
-    )
+    ; Action: Show Centered QR
+    if RegExMatch(requestLine, "^POST\s+/qr/show(?:\?| )") {
+        ShowCenteredQR()
+        SendHttpResponse(socket, 200, "OK", "QR shown")
+        CloseClient(socket)
+        return
+    }
 
-    ; ----------------------------
-    ; Method/path
-    ; ----------------------------
+    ; Action: Hide Centered QR
+    if RegExMatch(requestLine, "^POST\s+/qr/hide(?:\?| )") {
+        HideCenteredQR()
+        SendHttpResponse(socket, 200, "OK", "QR hidden")
+        CloseClient(socket)
+        return
+    }
 
-    if !RegExMatch(
-        requestLine,
-        "^POST\s+/(?:isbn|paste)(?:\?| )",
-        &routeMatch
-    ) {
-        DebugLog("Route rejected")
-
-        SendHttpResponse(
-            socket,
-            405,
-            "Method Not Allowed",
-            "Method Not Allowed"
-        )
-
+    ; Action: Paste / ISBN
+    if !RegExMatch(requestLine, "^POST\s+/(?:isbn|paste)(?:\?| )", &routeMatch) {
+        SendHttpResponse(socket, 405, "Method Not Allowed", "Method Not Allowed")
         CloseClient(socket)
         return
     }
 
     isPasteRoute := RegExMatch(requestLine, "^POST\s+/paste(?:\?| )")
 
-    ; ----------------------------
-    ; Token (only required if not /paste)
-    ; ----------------------------
-
+    ; Token verification (only required for direct legacy /isbn connections)
     if !isPasteRoute {
-        if !RegExMatch(
-            request,
-            "im)^Biblios-Token:\s*(.+?)\s*$",
-            &tokenMatch
-        ) {
-            DebugLog("Token missing")
-
-            SendHttpResponse(
-                socket,
-                401,
-                "Unauthorized",
-                "Unauthorized"
-            )
-
+        if !RegExMatch(request, "im)^Biblios-Token:\s*(.+?)\s*$", &tokenMatch) {
+            SendHttpResponse(socket, 401, "Unauthorized", "Unauthorized")
             CloseClient(socket)
             return
         }
 
         receivedToken := Trim(tokenMatch[1])
-
         validToken := BIBLIOS_TOKEN
         if FileExist(TOKEN_FILE) {
             try {
@@ -1088,121 +1046,42 @@ HandleHttpRequest(
             }
         }
 
-        if !SecureTokenCompare(
-            receivedToken,
-            validToken
-        ) {
-            DebugLog("Token rejected")
-
-            SendHttpResponse(
-                socket,
-                401,
-                "Unauthorized",
-                "Unauthorized"
-            )
-
+        if !SecureTokenCompare(receivedToken, validToken) {
+            SendHttpResponse(socket, 401, "Unauthorized", "Unauthorized")
             CloseClient(socket)
             return
         }
-
-        DebugLog("Token accepted")
     }
 
-    ; ----------------------------
-    ; Body
-    ; ----------------------------
-
-    body := SubStr(
-        request,
-        headerEnd + 4
-    )
-
-    ; Only use Content-Length bytes/chars.
+    body := SubStr(request, headerEnd + 4)
     if (contentLength >= 0)
-        body := SubStr(
-            body,
-            1,
-            contentLength
-        )
-
+        body := SubStr(body, 1, contentLength)
     body := Trim(body)
 
-    DebugLog(
-        "ISBN body: [" body "]"
-    )
-
     if !body {
-        SendHttpResponse(
-            socket,
-            400,
-            "Bad Request",
-            "Missing ISBN"
-        )
-
+        SendHttpResponse(socket, 400, "Bad Request", "Missing ISBN")
         CloseClient(socket)
         return
     }
 
     isbn := NormalizeISBN(body)
-
     if !IsISBNFormatValid(isbn) {
-        DebugLog(
-            "Invalid ISBN: [" isbn "]"
-        )
-
-        SendHttpResponse(
-            socket,
-            400,
-            "Bad Request",
-            "Invalid ISBN"
-        )
-
+        SendHttpResponse(socket, 400, "Bad Request", "Invalid ISBN")
         CloseClient(socket)
         return
     }
 
-    ; ----------------------------
-    ; Success
-    ; ----------------------------
-
-    DebugLog(
-        "Valid ISBN received: " isbn
-    )
-
     ArmISBN(isbn)
-
-    SendHttpResponse(
-        socket,
-        200,
-        "OK",
-        "OK"
-    )
-
+    SendHttpResponse(socket, 200, "OK", "OK")
     CloseClient(socket)
 }
 
 
-; ============================================================
-; HTTP responses
-; ============================================================
-
-SendHttpResponse(
-    socket,
-    statusCode,
-    reason,
-    body
-) {
-    response := "HTTP/1.1 "
-        . statusCode
-        . " "
-        . reason
-        . "`r`n"
+SendHttpResponse(socket, statusCode, reason, body) {
+    response := "HTTP/1.1 " . statusCode . " " . reason . "`r`n"
         . "Content-Type: text/plain; charset=utf-8`r`n"
-        . "Content-Length: "
-        . StrLen(body)
-        . "`r`n"
-        . "Connection: close`r`n"
-        . "`r`n"
+        . "Content-Length: " . StrLen(body) . "`r`n"
+        . "Connection: close`r`n`r`n"
         . body
 
     SendRaw(socket, response)
@@ -1210,22 +1089,11 @@ SendHttpResponse(
 
 
 SendRaw(socket, text) {
-    bytes := StrPut(
-        text,
-        "UTF-8"
-    )
-
+    bytes := StrPut(text, "UTF-8")
     sendBuffer := Buffer(bytes, 0)
+    StrPut(text, sendBuffer, "UTF-8")
 
-    StrPut(
-        text,
-        sendBuffer,
-        "UTF-8"
-    )
-
-    ; Do not send the terminating null byte.
     byteCount := bytes - 1
-
     DllCall(
         "Ws2_32\send",
         "Ptr", socket,
@@ -1237,52 +1105,31 @@ SendRaw(socket, text) {
 }
 
 
-; ============================================================
-; Token comparison
-; ============================================================
-
 SecureTokenCompare(a, b) {
     aLength := StrLen(a)
     bLength := StrLen(b)
-
     if (aLength != bLength)
         return false
 
     difference := 0
-
     Loop aLength {
-        difference |= Ord(
-            SubStr(a, A_Index, 1)
-        ) ^ Ord(
-            SubStr(b, A_Index, 1)
-        )
+        difference |= Ord(SubStr(a, A_Index, 1)) ^ Ord(SubStr(b, A_Index, 1))
     }
-
     return difference = 0
 }
 
 
-; ============================================================
-; Socket cleanup
-; ============================================================
-
 CloseClient(socket) {
     global clientStates
-
     if clientStates.Has(socket)
         clientStates.Delete(socket)
-
     CloseSocket(socket)
 }
 
 
 CloseSocket(socket) {
     if socket
-        DllCall(
-            "Ws2_32\closesocket",
-            "Ptr", socket,
-            "Int"
-        )
+        DllCall("Ws2_32\closesocket", "Ptr", socket, "Int")
 }
 
 
@@ -1290,13 +1137,18 @@ Shutdown(*) {
     global serverSocket
     global clientStates
     global winsockStarted
+    global qrGui
 
     SetTimer(PollSockets, 0)
     SetTimer(UpdateFollowToolTip, 0)
 
+    if qrGui {
+        qrGui.Destroy()
+        qrGui := 0
+    }
+
     for socket, state in clientStates
         CloseSocket(socket)
-
     clientStates.Clear()
 
     if serverSocket {
@@ -1305,42 +1157,17 @@ Shutdown(*) {
     }
 
     if winsockStarted {
-        DllCall(
-            "Ws2_32\WSACleanup"
-        )
-
+        DllCall("Ws2_32\WSACleanup")
         winsockStarted := false
     }
 }
 
 
-; ============================================================
-; Debug logging
-; ============================================================
-
 DebugLog(message) {
     global DEBUG_LOG
-
     try {
-        timestamp := FormatTime(
-            ,
-            "HH:mm:ss"
-        )
-
-        ; Avoid logging the token itself.
-        message := RegExReplace(
-            message,
-            "(?im)(Biblios-Token:\s*)[^\r\n]+",
-            "$1<TOKEN>"
-        )
-
-        FileAppend(
-            timestamp
-            " | "
-            message
-            "`n",
-            DEBUG_LOG,
-            "UTF-8"
-        )
+        timestamp := FormatTime(, "HH:mm:ss")
+        message := RegExReplace(message, "(?im)(Biblios-Token:\s*)[^\r\n]+", "$1<TOKEN>")
+        FileAppend(timestamp " | " message "`n", DEBUG_LOG, "UTF-8")
     }
 }
