@@ -12,10 +12,12 @@ import (
 )
 
 var (
-	ErrInvalidAuthHeader  = errors.New("missing or malformed authorization header")
-	ErrInvalidSignature   = errors.New("invalid SHA-256 signature")
-	ErrTimestampExpired   = errors.New("timestamp expired or outside allowed time window")
-	ErrEmptyTokenOrISBN   = errors.New("token and ISBN must not be empty")
+	ErrInvalidAuthHeader = errors.New("missing or malformed authorization header")
+	ErrInvalidSignature  = errors.New("invalid SHA-256 signature")
+	ErrTimestampExpired  = errors.New("timestamp expired or outside allowed time window")
+	ErrMissingTimestamp  = errors.New("missing timestamp header")
+	ErrInvalidTimestamp  = errors.New("unparseable timestamp")
+	ErrEmptyTokenOrISBN  = errors.New("token and ISBN must not be empty")
 )
 
 // Common date formats produced by iOS Shortcuts Format Date action
@@ -39,10 +41,15 @@ type Verifier struct {
 	maxSkew time.Duration
 }
 
+// DefaultMaxSkew is the default timestamp freshness window.
+// Kept tight (±15s) so a sniffed request is only usable for a few seconds;
+// single-use signatures (see pkg/server replayCache) cover the rest.
+const DefaultMaxSkew = 15 * time.Second
+
 // NewVerifier creates a new Verifier with a maximum acceptable timestamp skew.
 func NewVerifier(maxSkew time.Duration) *Verifier {
 	if maxSkew <= 0 {
-		maxSkew = 15 * time.Minute
+		maxSkew = DefaultMaxSkew
 	}
 	return &Verifier{maxSkew: maxSkew}
 }
@@ -58,17 +65,22 @@ func (v *Verifier) Verify(isbn, timestamp, authHeader, token string) error {
 		return ErrInvalidAuthHeader
 	}
 
-	// 1. Verify timestamp freshness if timestamp string is provided
-	if timestamp != "" {
-		if t, ok := parseTimestamp(timestamp); ok {
-			diff := time.Since(t)
-			if diff < 0 {
-				diff = -diff
-			}
-			if diff > v.maxSkew {
-				return fmt.Errorf("%w: difference is %v (max allowed: %v)", ErrTimestampExpired, diff, v.maxSkew)
-			}
-		}
+	// 1. Timestamp is mandatory and must be fresh. An absent or
+	// unparseable timestamp must never silently skip the freshness
+	// check, otherwise replay protection would be bypassed entirely.
+	if strings.TrimSpace(timestamp) == "" {
+		return ErrMissingTimestamp
+	}
+	t, ok := parseTimestamp(timestamp)
+	if !ok {
+		return fmt.Errorf("%w: %q", ErrInvalidTimestamp, timestamp)
+	}
+	diff := time.Since(t)
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > v.maxSkew {
+		return fmt.Errorf("%w: difference is %v (max allowed: %v)", ErrTimestampExpired, diff, v.maxSkew)
 	}
 
 	// 2. Compute expected SHA-256 hash: ISBN|timestamp|token

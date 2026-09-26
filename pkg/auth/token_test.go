@@ -134,6 +134,22 @@ func TestVerifier(t *testing.T) {
 			token:       token,
 			expectValid: false,
 		},
+		{
+			name:        "missing timestamp",
+			isbn:        isbn,
+			timestamp:   "",
+			authHeader:  "Bearer " + validHash,
+			token:       token,
+			expectValid: false,
+		},
+		{
+			name:        "unparseable timestamp",
+			isbn:        isbn,
+			timestamp:   "not-a-date",
+			authHeader:  "Bearer " + validHash,
+			token:       token,
+			expectValid: false,
+		},
 	}
 
 	verifier := NewVerifier(15 * time.Minute)
