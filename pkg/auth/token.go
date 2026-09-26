@@ -4,10 +4,8 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
-	"math/big"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -142,19 +140,14 @@ func (m *TokenManager) PrintTerminalQR(w io.Writer) error {
 	return nil
 }
 
-// GenerateRandomToken generates a cryptographically secure random alphanumeric string.
 func GenerateRandomToken(length int) (string, error) {
-	var sb strings.Builder
-	sb.Grow(length)
-	maxIdx := big.NewInt(int64(len(tokenCharset)))
-
-	for i := 0; i < length; i++ {
-		n, err := rand.Int(rand.Reader, maxIdx)
-		if err != nil {
-			return "", err
-		}
-		sb.WriteByte(tokenCharset[n.Int64()])
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
 	}
-
-	return sb.String(), nil
+	charLen := byte(len(tokenCharset))
+	for i := 0; i < length; i++ {
+		bytes[i] = tokenCharset[bytes[i]%charLen]
+	}
+	return string(bytes), nil
 }

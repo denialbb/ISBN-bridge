@@ -96,8 +96,12 @@ go run ./cmd/server
 
 ### 2. Run the AutoHotkey Client
 
-Run `ISBN scan/ISBN paste.ahk` using AutoHotkey v2:
+Run the client using AutoHotkey v2:
 ```powershell
+# Run the modular client directly
+& "client\main.ahk"
+
+# Or via the wrapper
 & "ISBN scan\ISBN paste.ahk"
 ```
 

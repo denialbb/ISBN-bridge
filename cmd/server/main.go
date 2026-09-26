@@ -145,11 +145,31 @@ func main() {
 }
 
 func getOutboundIP() string {
-	conn, err := net.Dial("udp", "8.8.8.8:80")
+	conn, err := net.DialTimeout("udp", "8.8.8.8:80", 500*time.Millisecond)
+	if err == nil {
+		defer conn.Close()
+		return conn.LocalAddr().(*net.UDPAddr).IP.String()
+	}
+
+	ifaces, err := net.Interfaces()
 	if err != nil {
 		return ""
 	}
-	defer conn.Close()
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
-	return localAddr.IP.String()
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
+				if ip4 := ipNet.IP.To4(); ip4 != nil {
+					return ip4.String()
+				}
+			}
+		}
+	}
+	return ""
 }

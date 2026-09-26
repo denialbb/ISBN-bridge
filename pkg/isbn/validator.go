@@ -2,7 +2,6 @@ package isbn
 
 import (
 	"errors"
-	"regexp"
 	"strings"
 )
 
@@ -12,15 +11,25 @@ var (
 	ErrInvalidFormat   = errors.New("invalid characters in ISBN")
 )
 
-var whitespaceHyphenRegex = regexp.MustCompile(`[\s-]+`)
-
-// Normalize strips spaces and hyphens, and converts check digit 'x' to uppercase 'X'.
 func Normalize(raw string) string {
-	cleaned := whitespaceHyphenRegex.ReplaceAllString(raw, "")
-	return strings.ToUpper(strings.TrimSpace(cleaned))
+	var sb strings.Builder
+	sb.Grow(len(raw))
+	for i := 0; i < len(raw); i++ {
+		b := raw[i]
+		switch {
+		case b >= '0' && b <= '9':
+			sb.WriteByte(b)
+		case b == 'x' || b == 'X':
+			sb.WriteByte('X')
+		case b == ' ' || b == '\t' || b == '\r' || b == '\n' || b == '-':
+			continue
+		default:
+			sb.WriteByte(b)
+		}
+	}
+	return sb.String()
 }
 
-// Validate normalizes and verifies the checksum of an ISBN-10 or ISBN-13.
 func Validate(raw string) (string, error) {
 	s := Normalize(raw)
 
@@ -73,11 +82,12 @@ func validateISBN10(s string) error {
 
 	lastChar := s[9]
 	var checkVal int
-	if lastChar == 'X' {
+	switch {
+	case lastChar == 'X':
 		checkVal = 10
-	} else if lastChar >= '0' && lastChar <= '9' {
+	case lastChar >= '0' && lastChar <= '9':
 		checkVal = int(lastChar - '0')
-	} else {
+	default:
 		return ErrInvalidFormat
 	}
 

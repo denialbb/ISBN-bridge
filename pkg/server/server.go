@@ -129,9 +129,10 @@ func (s *Server) handlePostISBN(w http.ResponseWriter, r *http.Request) {
 	// 4. Forward to AutoHotkey
 	if s.forwarder != nil {
 		if err := s.forwarder.Forward(r.Context(), normalizedISBN); err != nil {
-			log.Printf("Warning: failed to forward to AutoHotkey: %v", err)
+			log.Printf("Forwarding to AutoHotkey failed: %v", err)
+			http.Error(w, "Desktop client error: "+err.Error(), http.StatusBadGateway)
+			return
 		}
-		// Dismiss the QR code automatically on scan
 		go func() {
 			_ = s.forwarder.HideQR(context.Background())
 		}()
