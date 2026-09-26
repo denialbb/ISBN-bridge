@@ -79,12 +79,11 @@ Scanning from an iPhone uses two lightweight, native Apple Shortcuts that requir
 
 ---
 
-## 3. Future Android Support Roadmap
+## 3. Android Support (HTTP Shortcuts)
 
-We are designing Android compatibility using the same cryptographic protocol:
+Android uses the same cryptographic protocol — no server changes needed:
 
-- **Protocol Compatibility**: Any client that can generate `SHA-256(ISBN|Timestamp|Token)` and send an HTTP POST request to port `8765` will work seamlessly with the existing Go backend and AutoHotkey client without modifications.
-- **Recommended Approaches**:
-  1. **HTTP Shortcuts App (F-Droid / Play Store)**: Free, open-source automation app supporting camera barcode triggers, JavaScript hashing (`crypto.subtle`), and HTTP requests.
-  2. **Tasker / Automate Script**: Android automation tasks reading stored tokens and sending authenticated POST requests.
-  3. **Lightweight PWA / Native APK**: A dedicated, minimal web app running in mobile Chrome using the `BarcodeDetector` API and Web Crypto API.
+- **Protocol Compatibility**: Any client that can generate `SHA-256(ISBN|Timestamp|Token)` and send an HTTP POST request to port `8765` works seamlessly with the existing Go backend and AutoHotkey client.
+- **Recommended app**: [HTTP Shortcuts](https://f-droid.org/packages/ch.rmy.android.http_shortcuts/) (free, open-source) with [Binary Eye](https://f-droid.org/packages/de.markusfisch.android.binaryeye/) as the barcode scanner backend.
+- **Setup**: [`mobile/android/SETUP.md`](../mobile/android/SETUP.md) — pair once via the `/pair` page (copy `url` + `token` into global variables), import the flow, scan.
+- **Scanner script**: [`mobile/android/scanner.js`](../mobile/android/scanner.js) — pre-execution script verified against the Go verifier (syntax, stubbed composition run, live 401/502/409 matrix).
