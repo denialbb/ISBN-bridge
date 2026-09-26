@@ -31,6 +31,11 @@ class SoundManager {
     }
 
     static FindSoundFile(name) {
+        if (name = "windows_navigation" || name = "sounds/windows_navigation.wav") {
+            navSound := A_WinDir "\Media\Windows Navigation Start.wav"
+            if FileExist(navSound)
+                return navSound
+        }
         if FileExist(name)
             return name
         if FileExist(A_ScriptDir "\" name)
