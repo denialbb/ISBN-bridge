@@ -6,8 +6,7 @@ import hashlib
 from datetime import datetime
 
 AHK_EXE = r"C:\Users\DanyB\AppData\Local\Programs\AutoHotkey\v2\AutoHotkey64.exe"
-AHK_SCRIPT = r"C:\Users\DanyB\OneDrive\Documenti\AutoHotkey\client\main.ahk"
-GO_EXE = r"C:\Users\DanyB\OneDrive\Documenti\AutoHotkey\bin\isbn-bridge.exe"
+AHK_SCRIPT = r"C:\Users\DanyB\OneDrive\Documenti\Projects\ISBN-bridge\client\main.ahk"
 
 def test_full_pipeline():
     print("1. Starting AutoHotkey client (which supervises Go server)...")

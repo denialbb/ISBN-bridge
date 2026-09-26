@@ -5,7 +5,7 @@ class SoundManager {
         if !AppConfig.playTapSoundEnabled
             return
 
-        soundFile := (AppConfig.soundFile != "") ? AppConfig.soundFile : "tap.wav"
+        soundFile := (AppConfig.soundFile != "") ? AppConfig.soundFile : "sounds/tap.wav"
         this.PlaySoundFile(soundFile)
     }
 

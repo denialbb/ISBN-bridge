@@ -53,7 +53,7 @@ class TrayManager {
 
         ; Sound sample submenu
         this.soundMenu := Menu()
-        this.soundMenu.Add(I18n.Get("sound_tap"), (*) => this.SelectSound("tap.wav"))
+        this.soundMenu.Add(I18n.Get("sound_tap"), (*) => this.SelectSound("sounds/tap.wav"))
         this.soundMenu.Add(I18n.Get("sound_ios"), (*) => this.SelectSound("sounds/ios_tock.wav"))
         this.soundMenu.Add(I18n.Get("sound_bubble"), (*) => this.SelectSound("sounds/bubble_pop.wav"))
         this.soundMenu.Add(I18n.Get("sound_chime"), (*) => this.SelectSound("sounds/gentle_chime.wav"))
@@ -189,7 +189,7 @@ class TrayManager {
             this.soundMenu.Check(I18n.Get("tray_sound_enable"))
 
         soundFiles := [
-            "tap.wav",
+            "sounds/tap.wav",
             "sounds/ios_tock.wav",
             "sounds/bubble_pop.wav",
             "sounds/gentle_chime.wav",

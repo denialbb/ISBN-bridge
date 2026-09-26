@@ -43,7 +43,7 @@ type Config struct {
 
 	// UI settings
 	Language  string // Interface language: "auto", "it", "en" (default: "auto")
-	SoundFile string // Sound sample file (default: "tap.wav")
+	SoundFile string // Sound sample file (default: "sounds/tap.wav")
 
 	FilePath string
 }
@@ -64,7 +64,7 @@ func Default() *Config {
 		OverwriteExistingText: true,
 		AutoPasteOnHover:      true,
 		PlayTapSound:          true,
-		SoundFile:             "tap.wav",
+		SoundFile:             "sounds/tap.wav",
 		TooltipOffsetX:        10,
 		TooltipOffsetY:        12,
 		QRAutoShowOnRefresh:   true,

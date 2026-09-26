@@ -2,7 +2,7 @@
 
 ![Single file config](https://img.shields.io/badge/config-scanner.conf-blue)
 
-ISBN Bridge uses a single unified configuration file, [`scanner.conf`](file:///c:/Users/DanyB/OneDrive/Documenti/AutoHotkey/scanner.conf), shared between the Go backend server and the AutoHotkey desktop client.
+ISBN Bridge uses a single unified configuration file, [`scanner.conf`](../scanner.conf), shared between the Go backend server and the AutoHotkey desktop client.
 
 ---
 
@@ -84,6 +84,6 @@ The AutoHotkey taskbar tray icon provides live control over the configuration wi
 
 ## 3. Audio Customization
 
-- When `play_tap_sound = true`, the system plays [`tap.wav`](file:///c:/Users/DanyB/OneDrive/Documenti/AutoHotkey/tap.wav) located in the project root directory.
-- You can replace `tap.wav` with any standard 16-bit PCM WAV audio file of your choice.
-- If `tap.wav` is missing, the client automatically falls back to the default Windows navigation sound (`Windows Navigation Start.wav`).
+- When `play_tap_sound = true`, the system plays the configured file from `client/sounds/` (default `sounds/tap.wav`), resolved relative to the client folder.
+- You can replace it with any standard 16-bit PCM WAV audio file of your choice.
+- If the file is missing, the client automatically falls back to the default Windows navigation sound (`Windows Navigation Start.wav`).
