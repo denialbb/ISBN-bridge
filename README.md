@@ -112,3 +112,9 @@ For full setup instructions, see [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 - [Security Architecture & Threat Model](docs/SECURITY.md)
 - [Configuration Reference (`scanner.conf`)](docs/CONFIGURATION.md)
 - [Mobile Client Setup (iOS & Android)](docs/SHORTCUTS.md)
+
+---
+
+## Credits
+
+- Tray icon: [Barcode Scan icon by UXWing](https://uxwing.com/barcode-scan-icon/) (free for commercial use, whitened for tray legibility).
