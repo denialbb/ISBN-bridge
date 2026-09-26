@@ -1,5 +1,9 @@
 # Security Architecture & Cryptographic Verification
 
+![SHA-256 auth](https://img.shields.io/badge/auth-SHA--256-success)
+![Replay protection](https://img.shields.io/badge/replay-single--use-blue)
+![Rate limited](https://img.shields.io/badge/ratelimit-2req%2F10s-orange)
+
 This document details the threat model, authentication protocol, and cryptographic measures implemented in the ISBN Bridge system.
 
 ---
@@ -51,17 +55,23 @@ When a request arrives at `POST /isbn`, the Go server executes a strict verifica
 [Incoming Request]
         │
         ▼
+0. Per-IP Rate Limit (sliding window, default 2 req / 10s)
+        │ ── Exceeded? ──► HTTP 429 Too Many Requests
+        ▼
 1. Validate ISBN Format & Checksum (ISBN-10 / ISBN-13)
         │ ── Invalid? ──► HTTP 400 Bad Request
         ▼
-2. Verify Timestamp Skew (within +/- max_timestamp_skew_minutes)
-        │ ── Expired/Drifted? ──► HTTP 401 Unauthorized
+2. Verify Timestamp Presence, Format & Skew (within +/- max_timestamp_skew_seconds, default 15s)
+        │ ── Missing/Unparseable/Drifted? ──► HTTP 401 Unauthorized
         ▼
 3. Compute Expected SHA-256 Hash using Active Server Token
         │
         ▼
 4. Constant-Time Hash Comparison (subtle.ConstantTimeCompare)
         │ ── Mismatch? ──► HTTP 401 Unauthorized
+        ▼
+4b. Single-Use Signature Check (replay cache, default 100 entries / 60s TTL)
+        │ ── Already Used? ──► HTTP 409 Conflict
         ▼
 5. Forward to AutoHotkey Localhost Listener (:8766)
         │ ── AHK Offline? ──► HTTP 502 Bad Gateway
@@ -84,7 +94,46 @@ This guarantees that signature verification takes constant CPU time regardless o
 
 ---
 
-## 4. Token Lifecycle & Management
+## 4. LAN Hardening (No HTTPS Required)
+
+On a password-protected Wi-Fi network the main residual risks are annoyance
+and disruption (paste spam), not data theft. Four complementary measures
+address them while keeping the plain-HTTP design:
+
+### 4.1 Tight Timestamp Window (±15 seconds)
+
+`max_timestamp_skew_seconds` (default: `15`). A request whose `Timestamp`
+header is missing, unparseable, or outside the window is rejected with
+`401`. A sniffed request therefore stays usable for seconds only. The legacy
+`max_timestamp_skew_minutes` key is still honored when the seconds key is
+absent. Both the phone and the PC are normally NTP-synced to within a
+second, so the tight default is safe; raise it if you see false `401`s.
+
+### 4.2 Single-Use Signatures (Replay Protection)
+
+The server remembers the last `replay_cache_size` (default: `100`) accepted
+signatures for `replay_ttl_seconds` (default: `60`). Replaying a captured
+request returns `409 Conflict` and never reaches the desktop. Purely
+in-memory; no persistent storage.
+
+### 4.3 Per-IP Rate Limiting
+
+`POST /isbn` is limited to `rate_limit_max_requests` (default: `2`) per
+`rate_limit_window_seconds` (default: `10`) sliding window per source IP.
+Excess requests get `429 Too Many Requests`. Tune to taste: `0` disables the
+limiter. Health, QR, and pairing endpoints are not limited.
+
+### 4.4 Focus and Window Checks (Desktop Client)
+
+The AutoHotkey `PasteEngine` only emits keystrokes when the focused window
+matches `target_tab_title` **and** the cursor is an IBeam (text field). The
+check runs three times: at click time, 100 ms later in `OnDeferredClick`,
+and immediately before `SendInput` in `PasteNow` — so a window switch in the
+arming gap aborts the paste instead of mistyping into the wrong app.
+
+---
+
+## 5. Token Lifecycle & Management
 
 ### CSPRNG Generation
 Tokens are generated using cryptographically secure pseudorandom numbers from the operating system (`crypto/rand.Read`):

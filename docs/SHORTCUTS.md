@@ -1,5 +1,8 @@
 # Mobile Client Setup (iOS & Android)
 
+![iOS Shortcuts](https://img.shields.io/badge/iOS-Shortcuts-black?logo=apple&logoColor=white)
+![Android planned](https://img.shields.io/badge/Android-planned-lightgrey?logo=android&logoColor=white)
+
 This document describes how mobile scanning works with the ISBN Bridge pipeline, including iOS Shortcuts implementation and planned Android support.
 
 ---

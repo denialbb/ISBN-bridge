@@ -1,5 +1,8 @@
 # System Architecture & Technical Specifications
 
+![Go backend](https://img.shields.io/badge/backend-Go-00ADD8?logo=go&logoColor=white)
+![AHK client](https://img.shields.io/badge/client-AutoHotkey_v2-334455?logo=autohotkey&logoColor=white)
+
 This document details the internal architecture, network communication, and module structure of the **ISBN Bridge** pipeline.
 
 ---

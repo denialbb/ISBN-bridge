@@ -1,5 +1,7 @@
 # Configuration Guide (`scanner.conf`)
 
+![Single file config](https://img.shields.io/badge/config-scanner.conf-blue)
+
 ISBN Bridge uses a single unified configuration file, [`scanner.conf`](file:///c:/Users/DanyB/OneDrive/Documenti/AutoHotkey/scanner.conf), shared between the Go backend server and the AutoHotkey desktop client.
 
 ---
@@ -18,8 +20,18 @@ ahk_port = 8766
 # Options available via tray menu: 15, 30, 60, 120, 720, 1440.
 token_ttl_minutes = 60
 
-# Maximum allowed clock drift between iPhone and PC in minutes.
-max_timestamp_skew_minutes = 15
+# Maximum allowed clock drift between iPhone and PC in seconds.
+# Tight window: a sniffed request stays usable for seconds only.
+# (Legacy max_timestamp_skew_minutes is honored if this key is absent.)
+max_timestamp_skew_seconds = 15
+
+# Per-IP rate limit for POST /isbn (LAN anti-spam). 0 disables.
+rate_limit_max_requests = 2
+rate_limit_window_seconds = 10
+
+# Single-use signature replay protection. 0 disables.
+replay_cache_size = 100
+replay_ttl_seconds = 60
 
 [AutoPaste]
 # Window/tab title substring required for auto-paste actions (case-insensitive)

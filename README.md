@@ -1,5 +1,11 @@
 # ISBN Bridge
 
+![Go 1.26](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white)
+![AutoHotkey v2](https://img.shields.io/badge/AutoHotkey-v2-334455?logo=autohotkey&logoColor=white)
+![iOS Shortcuts](https://img.shields.io/badge/iOS-Shortcuts-black?logo=apple&logoColor=white)
+![SHA-256 auth](https://img.shields.io/badge/auth-SHA--256-success)
+
 **ISBN Bridge** connects mobile barcode scanning to your PC. Scan book barcodes with your phone and have them verified, authenticated, and pasted directly into your desktop browser or cataloging tools in real-time.
 
 ---
@@ -44,7 +50,9 @@ The system is designed to prevent unauthorized devices on your local Wi-Fi from 
 2. **SHA-256 Signatures**: The mobile phone never transmits the secret token across the network. Instead, it signs every scan:
    $$\text{Signature} = \text{SHA-256}(\text{ISBN} \parallel \text{Timestamp} \parallel \text{Token})$$
 3. **Replay & Timing Attack Protection**:
-   - Requests outside the allowed timestamp window are rejected.
+   - Requests with a missing/unparseable timestamp, or outside the tight ±15s window, are rejected.
+   - Each accepted signature is single-use (in-memory replay cache, 100 entries / 60s TTL).
+   - `POST /isbn` is rate-limited per IP (2 requests / 10s; `429` beyond that).
    - Hash verification uses constant-time comparison (`crypto/subtle.ConstantTimeCompare`).
 
 For deep technical details, see [docs/SECURITY.md](docs/SECURITY.md).
