@@ -6,6 +6,10 @@ class Logger {
     static Init(path := "") {
         if (path != "") {
             this.logPath := path
+        } else if A_IsCompiled {
+            ; Release layout: keep the log next to the exe (portable,
+            ; no admin rights needed unlike a parent such as Program Files)
+            this.logPath := A_ScriptDir "\isbn-bridge-debug.log"
         } else if FileExist(A_ScriptDir "\isbn-bridge-debug.log") {
             this.logPath := A_ScriptDir "\isbn-bridge-debug.log"
         } else {

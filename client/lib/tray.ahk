@@ -4,6 +4,7 @@ class TrayManager {
     static expiryMenu := Menu()
     static soundMenu := Menu()
     static languageMenu := Menu()
+    static settingsMenu := Menu()
     static consoleMenuItemName := ""
 
     static GetConsoleMenuLabel() {
@@ -44,11 +45,11 @@ class TrayManager {
         this.expiryMenu.Add(I18n.Get("tray_expiry_hours", 24, 1440), (*) => this.SetExpiry(1440))
 
         A_TrayMenu.Add(I18n.Get("tray_expiry"), this.expiryMenu)
-        A_TrayMenu.Add()
 
-        ; Configurable options
-        A_TrayMenu.Add(I18n.Get("tray_overwrite"), (*) => this.ToggleOverwrite())
-        A_TrayMenu.Add(I18n.Get("tray_auto_hover"), (*) => this.ToggleAutoHover())
+        ; Compact settings submenu (paste behavior, sound, QR, language)
+        this.settingsMenu := Menu()
+        this.settingsMenu.Add(I18n.Get("tray_overwrite"), (*) => this.ToggleOverwrite())
+        this.settingsMenu.Add(I18n.Get("tray_auto_hover"), (*) => this.ToggleAutoHover())
 
         ; Sound sample submenu
         this.soundMenu := Menu()
@@ -61,10 +62,9 @@ class TrayManager {
         this.soundMenu.Add(I18n.Get("sound_nav"), (*) => this.SelectSound("sounds/windows_navigation.wav"))
         this.soundMenu.Add()
         this.soundMenu.Add(I18n.Get("tray_sound_enable"), (*) => this.ToggleSound())
+        this.settingsMenu.Add(I18n.Get("tray_sound"), this.soundMenu)
 
-        A_TrayMenu.Add(I18n.Get("tray_sound"), this.soundMenu)
-        A_TrayMenu.Add(I18n.Get("tray_auto_qr"), (*) => this.ToggleAutoQR())
-        A_TrayMenu.Add()
+        this.settingsMenu.Add(I18n.Get("tray_auto_qr"), (*) => this.ToggleAutoQR())
 
         ; Language submenu
         this.languageMenu := Menu()
@@ -72,8 +72,9 @@ class TrayManager {
         this.languageMenu.Add()
         this.languageMenu.Add(I18n.Get("lang_it"), (*) => I18n.SetLanguage("it"))
         this.languageMenu.Add(I18n.Get("lang_en"), (*) => I18n.SetLanguage("en"))
+        this.settingsMenu.Add(I18n.Get("tray_language"), this.languageMenu)
 
-        A_TrayMenu.Add(I18n.Get("tray_language"), this.languageMenu)
+        A_TrayMenu.Add(I18n.Get("tray_settings"), this.settingsMenu)
         A_TrayMenu.Add()
 
         ; Quick actions
@@ -175,13 +176,13 @@ class TrayManager {
         if PasteEngine.enabled
             A_TrayMenu.Check(I18n.Get("tray_active"))
 
-        A_TrayMenu.Uncheck(I18n.Get("tray_overwrite"))
+        this.settingsMenu.Uncheck(I18n.Get("tray_overwrite"))
         if AppConfig.overwriteExistingText
-            A_TrayMenu.Check(I18n.Get("tray_overwrite"))
+            this.settingsMenu.Check(I18n.Get("tray_overwrite"))
 
-        A_TrayMenu.Uncheck(I18n.Get("tray_auto_hover"))
+        this.settingsMenu.Uncheck(I18n.Get("tray_auto_hover"))
         if AppConfig.autoPasteOnHover
-            A_TrayMenu.Check(I18n.Get("tray_auto_hover"))
+            this.settingsMenu.Check(I18n.Get("tray_auto_hover"))
 
         this.soundMenu.Uncheck(I18n.Get("tray_sound_enable"))
         if AppConfig.playTapSoundEnabled
@@ -224,9 +225,9 @@ class TrayManager {
         else if (I18n.langPreference = "en")
             this.languageMenu.Check(I18n.Get("lang_en"))
 
-        A_TrayMenu.Uncheck(I18n.Get("tray_auto_qr"))
+        this.settingsMenu.Uncheck(I18n.Get("tray_auto_qr"))
         if AppConfig.qrAutoShowOnRefresh
-            A_TrayMenu.Check(I18n.Get("tray_auto_qr"))
+            this.settingsMenu.Check(I18n.Get("tray_auto_qr"))
 
         options := [15, 30, 60, 120, 720, 1440]
         labels := [

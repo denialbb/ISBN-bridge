@@ -20,7 +20,9 @@ class ServerManager {
             return false
         }
 
-        workDir := A_ScriptDir "\.."
+        ; Compiled release layout is flat (exe + assets side by side),
+        ; so the working dir is the exe dir itself.
+        workDir := A_IsCompiled ? A_ScriptDir : A_ScriptDir "\.."
 
         try {
             Run('"' binPath '"', workDir, "Hide", &managedPid)
@@ -41,6 +43,7 @@ class ServerManager {
 
     static FindBinary() {
         candidates := [
+            A_ScriptDir "\isbn-bridge.exe",
             A_ScriptDir "\..\bin\isbn-bridge.exe",
             A_ScriptDir "\bin\isbn-bridge.exe",
             A_WorkingDir "\bin\isbn-bridge.exe"

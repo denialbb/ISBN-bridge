@@ -49,6 +49,17 @@ Hotkey("~Esc", (*) => (PasteEngine.Cancel(), QRModal.Hide()))
 
 TrayTip(I18n.Get("client_active_tip", AppConfig.httpPort), I18n.Get("app_title"))
 
+; First-run hint: teach left-click-to-QR once, then remember via flag file
+try {
+    flagDir := A_AppData "\ISBN Bridge"
+    flagFile := flagDir "\seen-hint.flag"
+    if !FileExist(flagFile) {
+        DirCreate(flagDir)
+        FileAppend("seen", flagFile, "UTF-8")
+        TrayTip(I18n.Get("tray_firstrun_hint"), I18n.Get("app_title"))
+    }
+}
+
 ; Show QR modal on startup if configured
 if AppConfig.qrAutoShowOnRefresh
     SetTimer(() => QRModal.Show(), -400)
