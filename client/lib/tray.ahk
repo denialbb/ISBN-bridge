@@ -7,6 +7,7 @@ class TrayManager {
 
     static Init() {
         A_TrayMenu.Delete()
+        A_IconTip := I18n.Get("tray_icon_tip")
 
         A_TrayMenu.Add(I18n.Get("tray_active"), (*) => this.ToggleEnabled())
         A_TrayMenu.Add()
