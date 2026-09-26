@@ -43,7 +43,7 @@ The system is designed to prevent unauthorized devices on your local Wi-Fi from 
 1. **Rotating Secret Tokens**: The Go server generates a 48-character cryptographic token (`crypto/rand`). Tokens automatically rotate based on your configured TTL (default: 60 minutes).
 2. **SHA-256 Signatures**: The mobile phone never transmits the secret token across the network. Instead, it signs every scan:
    $$\text{Signature} = \text{SHA-256}(\text{ISBN} \parallel \text{Timestamp} \parallel \text{Token})$$
-3. **Replay & Timing Attack Protection**: 
+3. **Replay & Timing Attack Protection**:
    - Requests outside the allowed timestamp window are rejected.
    - Hash verification uses constant-time comparison (`crypto/subtle.ConstantTimeCompare`).
 
@@ -54,14 +54,20 @@ For deep technical details, see [docs/SECURITY.md](docs/SECURITY.md).
 ## Mobile Scanning
 
 ### iOS (Apple Shortcuts)
+
 Scanning on iPhone is handled natively via two lightweight Apple Shortcuts:
+
 1. **Token Pairing Shortcut**: Scans the centered QR code on your PC monitor and stores the token locally.
 2. **Continuous Scanner Shortcut**: Opens the camera in a fast barcode-scanning loop, signs each ISBN with SHA-256, and posts it to your PC.
 
-> *Shortcut iCloud download links will be added here.*
+> _Shortcut iCloud download links will be added here._
+
+- ISBN Bridge: https://www.icloud.com/shortcuts/46434ad59d2b4bff92f8a2460bee9207
+- Pair ISBN Bridge: https://www.icloud.com/shortcuts/2cc219d6251f46d69ce5d6d3f4ce8cc8
 
 ### Android (Planned)
-Support for Android devices is planned using the same cryptographic protocol. Future updates will provide scripts/configs compatible with open-source automation apps (such as *HTTP Shortcuts* or *Tasker*) and a dedicated lightweight web scanner.
+
+Support for Android devices is planned using the same cryptographic protocol. Future updates will provide scripts/configs compatible with open-source automation apps (such as _HTTP Shortcuts_ or _Tasker_) and a dedicated lightweight web scanner.
 
 For full setup instructions, see [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 
@@ -70,18 +76,21 @@ For full setup instructions, see [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 ## Quick Start
 
 ### 1. Start the Go Server
+
 ```powershell
 # Windows binary
 .\bin\isbn-bridge.exe
 ```
 
 ### 2. Start the AutoHotkey Client
+
 ```powershell
 # AutoHotkey v2
 & "client\main.ahk"
 ```
 
 ### 3. Pair & Scan
+
 1. When the Go server starts, a QR code appears in the center of your screen.
 2. Point your phone's normal **Camera app** at the QR code and tap the link to pair automatically (no typing required!).
 3. Launch your **Scanner Shortcut** and point your camera at any book barcode!

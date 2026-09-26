@@ -22,21 +22,31 @@ const maxBodyBytes = 16 * 1024 // 16 KB
 
 // Config holds the dependencies for Server.
 type Config struct {
-	TokenManager *auth.TokenManager
-	Verifier     *auth.Verifier
-	Forwarder    Forwarder
-	Port         int
-	AppConfig    *config.Config
+	TokenManager     *auth.TokenManager
+	Verifier         *auth.Verifier
+	Forwarder        Forwarder
+	Port             int
+	AppConfig        *config.Config
+	ConsoleShow      func()
+	ConsoleHide      func()
+	ConsoleToggle    func() bool
+	ConsoleIsVisible func() bool
+	ShutdownFunc     func()
 }
 
 // Server implements the HTTP API for ISBN Bridge.
 type Server struct {
-	tokenMgr  *auth.TokenManager
-	verifier  *auth.Verifier
-	forwarder Forwarder
-	appConfig *config.Config
-	port      int
-	mux       *http.ServeMux
+	tokenMgr         *auth.TokenManager
+	verifier         *auth.Verifier
+	forwarder        Forwarder
+	appConfig        *config.Config
+	port             int
+	mux              *http.ServeMux
+	consoleShow      func()
+	consoleHide      func()
+	consoleToggle    func() bool
+	consoleIsVisible func() bool
+	shutdownFunc     func()
 }
 
 // NewServer initializes a new Server.
@@ -46,12 +56,17 @@ func NewServer(cfg Config) *Server {
 	}
 
 	s := &Server{
-		tokenMgr:  cfg.TokenManager,
-		verifier:  cfg.Verifier,
-		forwarder: cfg.Forwarder,
-		appConfig: cfg.AppConfig,
-		port:      cfg.Port,
-		mux:       http.NewServeMux(),
+		tokenMgr:         cfg.TokenManager,
+		verifier:         cfg.Verifier,
+		forwarder:        cfg.Forwarder,
+		appConfig:        cfg.AppConfig,
+		port:             cfg.Port,
+		mux:              http.NewServeMux(),
+		consoleShow:      cfg.ConsoleShow,
+		consoleHide:      cfg.ConsoleHide,
+		consoleToggle:    cfg.ConsoleToggle,
+		consoleIsVisible: cfg.ConsoleIsVisible,
+		shutdownFunc:     cfg.ShutdownFunc,
 	}
 
 	s.routes()
@@ -77,6 +92,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /token/ttl", s.handleSetTTL)
 	s.mux.HandleFunc("GET /health", s.handleHealth)
 	s.mux.HandleFunc("GET /pair", s.handlePair)
+	s.mux.HandleFunc("POST /console/show", s.handleConsoleShow)
+	s.mux.HandleFunc("POST /console/hide", s.handleConsoleHide)
+	s.mux.HandleFunc("POST /console/toggle", s.handleConsoleToggle)
+	s.mux.HandleFunc("GET /console", s.handleConsoleStatus)
+	s.mux.HandleFunc("POST /shutdown", s.handleShutdown)
 	s.mux.HandleFunc("GET /", s.handleRoot)
 }
 
@@ -308,6 +328,51 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"ttl_minutes": int(s.tokenMgr.TTL().Minutes()),
 		"server_time": time.Now().Format(time.RFC3339),
 	})
+}
+
+func (s *Server) handleConsoleShow(w http.ResponseWriter, r *http.Request) {
+	if s.consoleShow != nil {
+		s.consoleShow()
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "visible": true})
+}
+
+func (s *Server) handleConsoleHide(w http.ResponseWriter, r *http.Request) {
+	if s.consoleHide != nil {
+		s.consoleHide()
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "visible": false})
+}
+
+func (s *Server) handleConsoleToggle(w http.ResponseWriter, r *http.Request) {
+	visible := false
+	if s.consoleToggle != nil {
+		visible = s.consoleToggle()
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "visible": visible})
+}
+
+func (s *Server) handleConsoleStatus(w http.ResponseWriter, r *http.Request) {
+	visible := false
+	if s.consoleIsVisible != nil {
+		visible = s.consoleIsVisible()
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "visible": visible})
+}
+
+func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "shutting_down"})
+	if s.shutdownFunc != nil {
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			s.shutdownFunc()
+		}()
+	}
 }
 
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {

@@ -16,10 +16,11 @@ type Config struct {
 	mu sync.RWMutex
 
 	// Server settings
-	Port     int           // Port for incoming iOS shortcut requests (default: 8765)
-	AHKPort  int           // Port for local AutoHotkey paste listener (default: 8766)
-	TokenTTL time.Duration // Token lifespan before auto-rotation (default: 60m)
-	MaxSkew  time.Duration // Allowed clock drift for iOS request timestamps (default: 15m)
+	Port        int           // Port for incoming iOS shortcut requests (default: 8765)
+	AHKPort     int           // Port for local AutoHotkey paste listener (default: 8766)
+	TokenTTL    time.Duration // Token lifespan before auto-rotation (default: 60m)
+	MaxSkew     time.Duration // Allowed clock drift for iOS request timestamps (default: 15m)
+	HideConsole bool          // Hide console window on Windows (default: true)
 
 	// AutoPaste settings
 	TargetTabTitle        string // Browser window/tab title filter (default: "hardcover")
@@ -48,6 +49,7 @@ func Default() *Config {
 		AHKPort:               8766,
 		TokenTTL:              60 * time.Minute,
 		MaxSkew:               15 * time.Minute,
+		HideConsole:           true,
 		TargetTabTitle:        "hardcover",
 		OverwriteExistingText: true,
 		AutoPasteOnHover:      true,
@@ -112,6 +114,8 @@ func LoadOrCreate(path string) (*Config, error) {
 			if n, err := strconv.Atoi(val); err == nil && n > 0 {
 				cfg.MaxSkew = time.Duration(n) * time.Minute
 			}
+		case "hide_console":
+			cfg.HideConsole = parseBool(val, true)
 		case "target_tab_title":
 			cfg.TargetTabTitle = val
 		case "overwrite_existing_text":
@@ -167,7 +171,7 @@ func (c *Config) Save(path string) error {
 	}
 
 	content := fmt.Sprintf(`# ==============================================================================
-# BIBLIOS SCANNER & AUTO-PASTE CONFIGURATION (scanner.conf)
+# ISBN BRIDGE CONFIGURATION (scanner.conf)
 # Edit values below to customize ports, timings, audio, and visual behavior.
 # Both Go Server and AutoHotkey reload/use these settings.
 # ==============================================================================
@@ -185,6 +189,9 @@ token_ttl_minutes = %d
 # Maximum allowed clock difference (in minutes) between iPhone and PC
 max_timestamp_skew_minutes = %d
 
+# Hide the server console window on Windows (true: background mode, false: visible console)
+hide_console = %t
+
 
 [AutoPaste]
 # Window or browser tab title required for auto-paste (leave empty to paste into any active window)
@@ -196,8 +203,11 @@ overwrite_existing_text = %t
 # Automatically insert ISBN without clicking if mouse is already hovering a textbox
 auto_paste_on_hover = %t
 
-# Play a tactile tap audio effect upon successful paste
+# Play a tactile audio effect upon successful paste
 play_tap_sound = %t
+
+# Sound sample file to play
+sound_file = %s
 
 # Horizontal and vertical pixel distance between the mouse cursor and floating tooltips
 tooltip_offset_x = %d
@@ -213,20 +223,28 @@ auto_hide_seconds = %d
 
 # Size in pixels of the centered QR code image
 popup_size = %d
+
+
+[UI]
+# Interface language: auto (detect from OS/browser), it (Italian), en (English)
+language = %s
 `,
 		c.Port,
 		c.AHKPort,
 		int(c.TokenTTL.Minutes()),
 		int(c.MaxSkew.Minutes()),
+		c.HideConsole,
 		c.TargetTabTitle,
 		c.OverwriteExistingText,
 		c.AutoPasteOnHover,
 		c.PlayTapSound,
+		c.SoundFile,
 		c.TooltipOffsetX,
 		c.TooltipOffsetY,
 		c.QRAutoShowOnRefresh,
 		c.QRAutoHideSeconds,
 		c.QRPopupSize,
+		c.Language,
 	)
 
 	return os.WriteFile(path, []byte(content), 0644)

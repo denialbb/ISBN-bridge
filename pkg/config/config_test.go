@@ -26,6 +26,9 @@ func TestLoadOrDefault(t *testing.T) {
 	if cfg.TokenTTL != time.Hour {
 		t.Errorf("expected default TokenTTL 1h, got %v", cfg.TokenTTL)
 	}
+	if !cfg.HideConsole {
+		t.Errorf("expected default HideConsole true, got false")
+	}
 
 	// Verify file was written to disk
 	if _, err := os.Stat(confPath); os.IsNotExist(err) {

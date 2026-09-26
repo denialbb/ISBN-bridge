@@ -4,6 +4,21 @@ class TrayManager {
     static expiryMenu := Menu()
     static soundMenu := Menu()
     static languageMenu := Menu()
+    static consoleMenuItemName := ""
+
+    static GetConsoleMenuLabel() {
+        if ServerManager.IsConsoleVisible()
+            return I18n.Get("tray_hide_server_console")
+        return I18n.Get("tray_show_server_console")
+    }
+
+    static UpdateServerMenu() {
+        newLabel := this.GetConsoleMenuLabel()
+        if (this.consoleMenuItemName != "" && this.consoleMenuItemName != newLabel) {
+            try A_TrayMenu.Rename(this.consoleMenuItemName, newLabel)
+            this.consoleMenuItemName := newLabel
+        }
+    }
 
     static Init() {
         A_TrayMenu.Delete()
@@ -59,6 +74,10 @@ class TrayManager {
         A_TrayMenu.Add(showQRLabel, (*) => QRModal.Show())
         A_TrayMenu.Default := showQRLabel
         A_TrayMenu.ClickCount := 1
+
+        this.consoleMenuItemName := this.GetConsoleMenuLabel()
+        A_TrayMenu.Add(this.consoleMenuItemName, (*) => ServerManager.ToggleConsole())
+
         A_TrayMenu.Add(I18n.Get("tray_reset_token"), (*) => this.ResetToken())
         A_TrayMenu.Add(I18n.Get("tray_open_conf"), (*) => Run(AppConfig.filePath))
         A_TrayMenu.Add(I18n.Get("tray_clear_isbn"), (*) => PasteEngine.Cancel())
@@ -217,5 +236,7 @@ class TrayManager {
             if (AppConfig.tokenTtlMinutes = options[A_Index])
                 this.expiryMenu.Check(labels[A_Index])
         }
+
+        this.UpdateServerMenu()
     }
 }

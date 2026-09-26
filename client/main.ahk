@@ -8,11 +8,16 @@ CoordMode("Mouse", "Screen")
 #Include "lib/config.ahk"
 #Include "lib/i18n.ahk"
 #Include "lib/logger.ahk"
+
+; Catch and log any unhandled runtime exceptions
+OnError((err, mode) => (Logger.Log("UNHANDLED ERROR: " err.Message " at line " err.Line " in " err.File), 0))
+
 #Include "lib/sound.ahk"
 #Include "lib/tooltip.ahk"
 #Include "lib/ui_qr.ahk"
 #Include "lib/paste.ahk"
 #Include "lib/server.ahk"
+#Include "lib/server_manager.ahk"
 #Include "lib/tray.ahk"
 
 ; Initialize configuration from scanner.conf
@@ -20,7 +25,7 @@ AppConfig.Init()
 I18n.Init()
 
 ; Register cleanup on shutdown
-OnExit((*) => HttpListener.Shutdown())
+OnExit((*) => (HttpListener.Shutdown(), ServerManager.Shutdown()))
 
 ; Start local HTTP listener
 if !HttpListener.Start(AppConfig.httpPort) {
@@ -31,6 +36,9 @@ if !HttpListener.Start(AppConfig.httpPort) {
     )
     ExitApp()
 }
+
+; Start or attach to Go server (hidden console)
+ServerManager.StartOrAttach()
 
 ; Build system tray menu
 TrayManager.Init()

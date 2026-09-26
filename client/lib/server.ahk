@@ -22,6 +22,11 @@ class HttpListener {
             return false
         }
 
+        ; Enable SO_REUSEADDR (SOL_SOCKET = 0xFFFF, SO_REUSEADDR = 0x0004)
+        reuseOpt := Buffer(4, 0)
+        NumPut("Int", 1, reuseOpt, 0)
+        DllCall("Ws2_32\setsockopt", "Ptr", this.serverSocket, "Int", 0xFFFF, "Int", 0x0004, "Ptr", reuseOpt.Ptr, "Int", 4, "Int")
+
         ; Bind to 127.0.0.1 (localhost only)
         address := Buffer(16, 0)
         NumPut("UShort", 2, address, 0) ; AF_INET
@@ -29,7 +34,16 @@ class HttpListener {
         NumPut("UShort", netPort, address, 2)
         NumPut("UInt", 0, address, 4)   ; Bind to local interfaces
 
-        if (DllCall("Ws2_32\bind", "Ptr", this.serverSocket, "Ptr", address.Ptr, "Int", 16, "Int") != 0) {
+        bound := false
+        Loop 10 {
+            if (DllCall("Ws2_32\bind", "Ptr", this.serverSocket, "Ptr", address.Ptr, "Int", 16, "Int") = 0) {
+                bound := true
+                break
+            }
+            Sleep(200)
+        }
+
+        if !bound {
             this.CloseSocket(this.serverSocket)
             return false
         }

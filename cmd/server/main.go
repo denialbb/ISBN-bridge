@@ -23,7 +23,10 @@ func main() {
 	ahkPortFlag := flag.Int("ahk-port", 0, "Override AutoHotkey listener port")
 	tokenFile := flag.String("token-file", "token.txt", "Path to file for persisting active token")
 	noQR := flag.Bool("no-terminal-qr", false, "Disable printing ANSI QR code to terminal")
+	hideFlag := flag.Bool("hide-console", false, "Hide server console window on Windows")
 	flag.Parse()
+
+	initConsole()
 
 	log.Println("==================================================")
 	log.Println("             ISBN BRIDGE GO SERVER                ")
@@ -45,6 +48,9 @@ func main() {
 	if *ahkPortFlag > 0 {
 		appCfg.AHKPort = *ahkPortFlag
 	}
+	if *hideFlag {
+		appCfg.HideConsole = true
+	}
 
 	tokenMgr := auth.NewTokenManager(*tokenFile, appCfg.TokenTTL)
 	token, err := tokenMgr.GetToken()
@@ -52,16 +58,30 @@ func main() {
 		log.Fatalf("Failed to initialize token: %v", err)
 	}
 
+	shutdownChan := make(chan struct{})
+	shutdownFunc := func() {
+		select {
+		case <-shutdownChan:
+		default:
+			close(shutdownChan)
+		}
+	}
+
 	verifier := auth.NewVerifier(appCfg.MaxSkew)
 	ahkTarget := fmt.Sprintf("http://127.0.0.1:%d", appCfg.AHKPort)
 	forwarder := server.NewAHKForwarder(ahkTarget)
 
 	srv := server.NewServer(server.Config{
-		TokenManager: tokenMgr,
-		Verifier:     verifier,
-		Forwarder:    forwarder,
-		Port:         appCfg.Port,
-		AppConfig:    appCfg,
+		TokenManager:     tokenMgr,
+		Verifier:         verifier,
+		Forwarder:        forwarder,
+		Port:             appCfg.Port,
+		AppConfig:        appCfg,
+		ConsoleShow:      showConsole,
+		ConsoleHide:      hideConsole,
+		ConsoleToggle:    toggleConsole,
+		ConsoleIsVisible: isConsoleVisible,
+		ShutdownFunc:     shutdownFunc,
 	})
 
 	localIP := getOutboundIP()
@@ -140,10 +160,18 @@ func main() {
 		}
 	}()
 
+	// Auto-hide console if configured
+	if appCfg.HideConsole {
+		hideConsole()
+	}
+
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	select {
+	case <-quit:
+	case <-shutdownChan:
+	}
 
 	log.Println("Shutting down ISBN Bridge server...")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

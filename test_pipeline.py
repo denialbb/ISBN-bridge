@@ -10,13 +10,10 @@ AHK_SCRIPT = r"C:\Users\DanyB\OneDrive\Documenti\AutoHotkey\client\main.ahk"
 GO_EXE = r"C:\Users\DanyB\OneDrive\Documenti\AutoHotkey\bin\isbn-bridge.exe"
 
 def test_full_pipeline():
-    print("1. Starting AutoHotkey client...")
+    print("1. Starting AutoHotkey client (which supervises Go server)...")
     ahk_proc = subprocess.Popen([AHK_EXE, AHK_SCRIPT])
     
-    print("2. Starting Go server...")
-    go_proc = subprocess.Popen([GO_EXE])
-    
-    time.sleep(1.2)
+    time.sleep(2.0)
     
     try:
         # AHK Health: POST /qr/show
@@ -43,16 +40,29 @@ def test_full_pipeline():
             assert resp.status == 200, f"Expected 200, got {resp.status}"
             print("   -> AHK Direct Paste OK")
 
-        # Go Server: GET /health
+        # Go Server: GET /health and GET /pair?format=json
         print("6. Testing Go server GET /health...")
         with urllib.request.urlopen("http://127.0.0.1:8765/health", timeout=3) as resp:
             assert resp.status == 200
             print("   -> Go Server Health OK")
 
-        # Read active token
-        with open("token.txt", "r", encoding="utf-8") as f:
-            token = f.read().strip()
-        print(f"   -> Read active token: {token[:8]}...")
+        # Test console endpoint
+        print("6b. Testing Go server /console endpoints...")
+        with urllib.request.urlopen("http://127.0.0.1:8765/console", timeout=3) as resp:
+            assert resp.status == 200
+            print("   -> GET /console OK")
+
+        req_toggle = urllib.request.Request("http://127.0.0.1:8765/console/toggle", data=b"", method="POST")
+        with urllib.request.urlopen(req_toggle, timeout=3) as resp:
+            assert resp.status == 200
+            print("   -> POST /console/toggle OK")
+
+        # Read active token from /pair?format=json
+        import json
+        with urllib.request.urlopen("http://127.0.0.1:8765/pair?format=json", timeout=3) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            token = data["token"]
+        print(f"   -> Live active token: {token[:8]}...")
 
         # Go Server: Authenticated POST /isbn (with forward to AutoHotkey)
         print("7. Testing End-to-End iOS scan request: POST /isbn -> Go -> AHK...")
@@ -84,15 +94,9 @@ def test_full_pipeline():
         print("Cleaning up processes...")
         try:
             ahk_proc.terminate()
-            ahk_proc.wait(timeout=1)
+            ahk_proc.wait(timeout=2)
         except Exception:
             ahk_proc.kill()
-
-        try:
-            go_proc.terminate()
-            go_proc.wait(timeout=1)
-        except Exception:
-            go_proc.kill()
 
 if __name__ == "__main__":
     test_full_pipeline()

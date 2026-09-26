@@ -17,6 +17,7 @@ class AppConfig {
     static qrAutoHideSeconds := 45
     static qrPopupSize := 280
     static language := "auto"
+    static hideConsole := true
 
     static Init(path := "") {
         this.filePath := (path != "") ? path : this.FindConfigFile()
@@ -39,6 +40,7 @@ class AppConfig {
         this.goPort := Integer(IniRead(this.filePath, "Server", "port", 8765))
         this.goServerUrl := "http://127.0.0.1:" this.goPort
         this.tokenTtlMinutes := Integer(IniRead(this.filePath, "Server", "token_ttl_minutes", 60))
+        this.hideConsole := (IniRead(this.filePath, "Server", "hide_console", "true") = "true")
 
         this.targetTabTitle := IniRead(this.filePath, "AutoPaste", "target_tab_title", "hardcover")
         this.overwriteExistingText := (IniRead(this.filePath, "AutoPaste", "overwrite_existing_text", "true") = "true")
