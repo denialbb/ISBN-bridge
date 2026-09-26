@@ -26,6 +26,21 @@ func TestLoadOrDefault(t *testing.T) {
 	if cfg.TokenTTL != time.Hour {
 		t.Errorf("expected default TokenTTL 1h, got %v", cfg.TokenTTL)
 	}
+	if cfg.MaxSkew != 15*time.Second {
+		t.Errorf("expected default MaxSkew 15s, got %v", cfg.MaxSkew)
+	}
+	if cfg.RateLimitMax != 2 {
+		t.Errorf("expected default RateLimitMax 2, got %d", cfg.RateLimitMax)
+	}
+	if cfg.RateLimitWindow != 10*time.Second {
+		t.Errorf("expected default RateLimitWindow 10s, got %v", cfg.RateLimitWindow)
+	}
+	if cfg.ReplaySize != 100 {
+		t.Errorf("expected default ReplaySize 100, got %d", cfg.ReplaySize)
+	}
+	if cfg.ReplayTTL != 60*time.Second {
+		t.Errorf("expected default ReplayTTL 60s, got %v", cfg.ReplayTTL)
+	}
 	if !cfg.HideConsole {
 		t.Errorf("expected default HideConsole true, got false")
 	}
@@ -82,5 +97,63 @@ popup_size = 320
 	}
 	if cfg2.OverwriteExistingText != false {
 		t.Errorf("expected OverwriteExistingText false, got true")
+	}
+}
+
+func TestHardeningKeys(t *testing.T) {
+	tempDir := t.TempDir()
+	confPath := filepath.Join(tempDir, "scanner.conf")
+
+	// Seconds key takes precedence over legacy minutes regardless of order.
+	content := `
+[Server]
+max_timestamp_skew_minutes = 20
+max_timestamp_skew_seconds = 45
+rate_limit_max_requests = 5
+rate_limit_window_seconds = 30
+replay_cache_size = 50
+replay_ttl_seconds = 120
+`
+	if err := os.WriteFile(confPath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := LoadOrCreate(confPath)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	if cfg.MaxSkew != 45*time.Second {
+		t.Errorf("expected MaxSkew 45s (seconds key wins), got %v", cfg.MaxSkew)
+	}
+	if cfg.RateLimitMax != 5 {
+		t.Errorf("expected RateLimitMax 5, got %d", cfg.RateLimitMax)
+	}
+	if cfg.RateLimitWindow != 30*time.Second {
+		t.Errorf("expected RateLimitWindow 30s, got %v", cfg.RateLimitWindow)
+	}
+	if cfg.ReplaySize != 50 {
+		t.Errorf("expected ReplaySize 50, got %d", cfg.ReplaySize)
+	}
+	if cfg.ReplayTTL != 120*time.Second {
+		t.Errorf("expected ReplayTTL 120s, got %v", cfg.ReplayTTL)
+	}
+
+	// Round-trip through Save preserves the hardening values.
+	if err := cfg.Save(confPath); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+	reloaded, err := LoadOrCreate(confPath)
+	if err != nil {
+		t.Fatalf("failed to reload config: %v", err)
+	}
+	if reloaded.MaxSkew != 45*time.Second {
+		t.Errorf("expected reloaded MaxSkew 45s, got %v", reloaded.MaxSkew)
+	}
+	if reloaded.RateLimitMax != 5 || reloaded.RateLimitWindow != 30*time.Second {
+		t.Errorf("expected reloaded limiter 5/30s, got %d/%v", reloaded.RateLimitMax, reloaded.RateLimitWindow)
+	}
+	if reloaded.ReplaySize != 50 || reloaded.ReplayTTL != 120*time.Second {
+		t.Errorf("expected reloaded replay 50/120s, got %d/%v", reloaded.ReplaySize, reloaded.ReplayTTL)
 	}
 }

@@ -93,6 +93,9 @@ func main() {
 
 	log.Printf("Active Token: %s", token)
 	log.Printf("Token TTL:    %v (auto-refreshes)", appCfg.TokenTTL)
+	log.Printf("Timestamp skew window: ±%v", appCfg.MaxSkew)
+	log.Printf("Rate limit:   %d req / %v per IP on POST /isbn", appCfg.RateLimitMax, appCfg.RateLimitWindow)
+	log.Printf("Replay cache: %d signatures / %v TTL", appCfg.ReplaySize, appCfg.ReplayTTL)
 	log.Printf("Listening on: http://0.0.0.0:%d", appCfg.Port)
 	log.Printf("  -> Mobile Pairing URL: %s/pair?token=%s", serverURL, token)
 	log.Printf("  -> Browser QR page:    %s/qr", serverURL)

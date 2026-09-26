@@ -19,8 +19,14 @@ type Config struct {
 	Port        int           // Port for incoming iOS shortcut requests (default: 8765)
 	AHKPort     int           // Port for local AutoHotkey paste listener (default: 8766)
 	TokenTTL    time.Duration // Token lifespan before auto-rotation (default: 60m)
-	MaxSkew     time.Duration // Allowed clock drift for iOS request timestamps (default: 15m)
+	MaxSkew     time.Duration // Allowed clock drift for request timestamps (default: 15s)
 	HideConsole bool          // Hide console window on Windows (default: true)
+
+	// LAN hardening (see docs/SECURITY.md)
+	RateLimitMax    int           // Max POST /isbn requests per window per IP, <=0 disables (default: 2)
+	RateLimitWindow time.Duration // Sliding window for rate limiting (default: 10s)
+	ReplaySize      int           // Max remembered signatures for single-use replay protection, <=0 disables (default: 100)
+	ReplayTTL       time.Duration // How long a used signature stays remembered (default: 60s)
 
 	// AutoPaste settings
 	TargetTabTitle        string // Browser window/tab title filter (default: "hardcover")
@@ -48,8 +54,12 @@ func Default() *Config {
 		Port:                  8765,
 		AHKPort:               8766,
 		TokenTTL:              60 * time.Minute,
-		MaxSkew:               15 * time.Minute,
+		MaxSkew:               15 * time.Second,
 		HideConsole:           true,
+		RateLimitMax:          2,
+		RateLimitWindow:       10 * time.Second,
+		ReplaySize:            100,
+		ReplayTTL:             60 * time.Second,
 		TargetTabTitle:        "hardcover",
 		OverwriteExistingText: true,
 		AutoPasteOnHover:      true,
@@ -82,6 +92,12 @@ func LoadOrCreate(path string) (*Config, error) {
 	}
 	defer file.Close()
 
+	// Timestamp skew may be expressed in seconds (preferred) or in
+	// minutes (legacy key). Seconds take precedence regardless of
+	// line order, so resolution is deferred until after the scan.
+	skewSecondsSeen := -1
+	skewMinutesSeen := -1
+
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -112,7 +128,27 @@ func LoadOrCreate(path string) (*Config, error) {
 			}
 		case "max_timestamp_skew_minutes":
 			if n, err := strconv.Atoi(val); err == nil && n > 0 {
-				cfg.MaxSkew = time.Duration(n) * time.Minute
+				skewMinutesSeen = n
+			}
+		case "max_timestamp_skew_seconds":
+			if n, err := strconv.Atoi(val); err == nil && n > 0 {
+				skewSecondsSeen = n
+			}
+		case "rate_limit_max_requests":
+			if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+				cfg.RateLimitMax = n
+			}
+		case "rate_limit_window_seconds":
+			if n, err := strconv.Atoi(val); err == nil && n > 0 {
+				cfg.RateLimitWindow = time.Duration(n) * time.Second
+			}
+		case "replay_cache_size":
+			if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+				cfg.ReplaySize = n
+			}
+		case "replay_ttl_seconds":
+			if n, err := strconv.Atoi(val); err == nil && n > 0 {
+				cfg.ReplayTTL = time.Duration(n) * time.Second
 			}
 		case "hide_console":
 			cfg.HideConsole = parseBool(val, true)
@@ -149,7 +185,20 @@ func LoadOrCreate(path string) (*Config, error) {
 		}
 	}
 
-	return cfg, scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	// Resolve timestamp skew: seconds key wins, then legacy minutes,
+	// otherwise keep the built-in default.
+	switch {
+	case skewSecondsSeen > 0:
+		cfg.MaxSkew = time.Duration(skewSecondsSeen) * time.Second
+	case skewMinutesSeen > 0:
+		cfg.MaxSkew = time.Duration(skewMinutesSeen) * time.Minute
+	}
+
+	return cfg, nil
 }
 
 // SetTokenTTL updates the TTL in-memory and saves to disk.
@@ -186,8 +235,20 @@ ahk_port = %d
 # Token expiration duration in minutes before automatic regeneration (e.g. 15, 30, 60, 120)
 token_ttl_minutes = %d
 
-# Maximum allowed clock difference (in minutes) between iPhone and PC
-max_timestamp_skew_minutes = %d
+# Maximum allowed clock difference (in seconds) between iPhone and PC
+# Tight window: a sniffed request is only usable for a few seconds.
+# Legacy key max_timestamp_skew_minutes is still honored if this is absent.
+max_timestamp_skew_seconds = %d
+
+# Rate limiting for POST /isbn per IP (LAN anti-spam).
+# max 0 disables the limiter.
+rate_limit_max_requests = %d
+rate_limit_window_seconds = %d
+
+# Single-use signature replay protection: remembered signatures and TTL.
+# size 0 disables replay detection.
+replay_cache_size = %d
+replay_ttl_seconds = %d
 
 # Hide the server console window on Windows (true: background mode, false: visible console)
 hide_console = %t
@@ -232,7 +293,11 @@ language = %s
 		c.Port,
 		c.AHKPort,
 		int(c.TokenTTL.Minutes()),
-		int(c.MaxSkew.Minutes()),
+		int(c.MaxSkew.Seconds()),
+		c.RateLimitMax,
+		int(c.RateLimitWindow.Seconds()),
+		c.ReplaySize,
+		int(c.ReplayTTL.Seconds()),
 		c.HideConsole,
 		c.TargetTabTitle,
 		c.OverwriteExistingText,
