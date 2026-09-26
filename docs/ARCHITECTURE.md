@@ -28,7 +28,7 @@ The system consists of three loosely coupled layers designed for low latency, se
 │  - CSPRNG Token Manager         │
 │  - SHA-256 Constant-Time Auth   │
 │  - ISBN-10 / ISBN-13 Checksums  │
-│  - Web & ANSI QR Generators     │
+│  - Web QR & PNG generators      │
 └────────────────┬────────────────┘
                  │
                  │ HTTP POST /paste, /qr/show, /qr/hide (localhost only)
@@ -37,7 +37,7 @@ The system consists of three loosely coupled layers designed for low latency, se
 ┌─────────────────────────────────┐
 │     AutoHotkey Client (:8766)   │
 │  - Non-blocking Winsock Server  │
-│  - Centered Seamless QR Overlay │
+│  - Centered QR Overlay │
 │  - Hover-detection & Paste      │
 │  - Tray Menu & Config Sync      │
 └─────────────────────────────────┘
@@ -65,12 +65,19 @@ The Go backend acts as the secure gateway between mobile devices on the local Wi
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/isbn` | Receives scanned ISBN from mobile. Validates checksum & signature, then forwards to AutoHotkey. |
-| `GET` | `/qr` | Web page rendering the active token QR code and a button for manual rotation. |
-| `GET` | `/qr.png` | Raw PNG stream of the active token QR code (used by the AHK modal popup). |
+| `GET` | `/qr` | Pairing page with the active token QR code. |
+| `GET` | `/qr.png` | Raw PNG of the active token QR code (used by the AHK modal popup). |
+| `GET` | `/pair` | Pairing page for phones: auto-launches the iOS shortcut or offers the config JSON. Append `?format=json` for JSON. |
+| `GET` | `/` | Redirects to `/qr`. |
 | `POST` | `/qr/show` | Triggers the centered AutoHotkey QR popup on the desktop. |
-| `POST` | `/token/refresh` | Immediately rotates the active token and triggers the QR popup. |
-| `POST` | `/token/ttl?minutes=N` | Dynamically updates the token TTL and regenerates the active token. |
+| `POST` | `/token/refresh` | Immediately rotates the active token and triggers the QR popup. Returns the new token as JSON. |
+| `POST` | `/token/ttl?minutes=N` | Updates the token TTL and regenerates the active token. |
 | `GET` | `/health` | Returns JSON status including expiry state, TTL, and server time. |
+| `POST` | `/console/show`, `/console/hide`, `/console/toggle` | Show, hide, or toggle the server console window (called by the desktop client). |
+| `GET` | `/console` | Returns whether the server console is visible. |
+| `POST` | `/shutdown` | Stops the server (called by the desktop client on exit). |
+
+The AutoHotkey listener on port `8766` exposes `POST /paste`, `/qr/show`, and `/qr/hide` for the Go forwarder.
 
 ---
 
@@ -86,7 +93,7 @@ client/
     ├── logger.ahk       # Logger: timestamped logging to isbn-bridge-debug.log
     ├── paste.ahk        # PasteEngine: auto-paste & hover detection
     ├── server.ahk       # HttpListener: Winsock non-blocking HTTP server
-    ├── sound.ahk        # SoundManager: tactile tap audio feedback
+    ├── sound.ahk        # SoundManager: tap sound on paste
     ├── tooltip.ahk      # FollowToolTip: 30 Hz mouse-following UI overlay
     ├── tray.ahk         # TrayManager: taskbar context menu & TTL submenu
     └── ui_qr.ahk        # QRModal: centered borderless GUI popup
@@ -97,12 +104,12 @@ client/
 1. **Winsock Non-Blocking Listener (`lib/server.ahk`)**:
    - Uses native `ws2_32.dll` system calls (`socket`, `ioctlsocket(FIONBIO)`, `bind`, `listen`, `recv`).
    - Polls active sockets via bound method timers (`ObjBindMethod`) at 40 Hz (25 ms period) without blocking the Windows message pump.
-   - Binds to `0.0.0.0` or localhost port `8766` to receive commands strictly from the local machine.
+   - Binds port `8766` on all interfaces (`0.0.0.0`). Localhost-only binding is a pending hardening item — see `docs/SECURITY.md`.
 
 2. **Paste & Hover Engine (`lib/paste.ahk`)**:
-   - **Zero-Click Hover Insertion**: When mouse pointer is hovering over an `IBeam` cursor inside the target window (e.g. `hardcover`), ISBN is typed/pasted immediately with zero user clicks.
+   - **Hover Insertion**: When the pointer is over an `IBeam` cursor in the target window (e.g. `hardcover`), the ISBN is pasted with no click.
    - **Overwrite Mode**: Sends `Ctrl+A` before pasting to replace existing placeholder text when configured.
-   - **Clipboard Protection**: Temporarily manages clipboard restoration after paste.
+   - **Clipboard Use**: Puts the ISBN on the clipboard for pasting. The previous clipboard contents are not restored, so copy anything you need before scanning.
 
 3. **Follow Tooltip (`lib/tooltip.ahk`)**:
    - Smoothly tracks mouse movement at 30 Hz (33 ms interval).

@@ -90,15 +90,18 @@ if subtle.ConstantTimeCompare([]byte(clientHash), []byte(expectedHash)) != 1 {
 }
 ```
 
-This guarantees that signature verification takes constant CPU time regardless of how many characters match.
+The hash comparison itself runs in constant time for equal-length inputs; it does not make the whole request path constant-time.
 
 ---
 
-## 4. LAN Hardening (No HTTPS Required)
+## 4. LAN Hardening (plain HTTP)
 
-On a password-protected Wi-Fi network the main residual risks are annoyance
-and disruption (paste spam), not data theft. Four complementary measures
-address them while keeping the plain-HTTP design:
+HTTPS is not implemented; opt-in TLS is tracked in
+[#1](https://github.com/denialbb/ISBN-bridge/issues/1). Until then, on a
+trusted, password-protected Wi-Fi network the remaining risk is mainly
+paste spam. On open or shared Wi-Fi, assume traffic (including ISBNs and
+the pairing token) can be read; prefer a private network. The measures
+below limit what a LAN observer can do in the meantime:
 
 ### 4.1 Tight Timestamp Window (±15 seconds)
 

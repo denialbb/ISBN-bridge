@@ -43,15 +43,8 @@ vibrates per scan; cancel the scanner to stop the loop. Server responses:
 
 ## Verification
 
-`scanner.js` was validated three ways (Sep 2026):
+`scanner.js` was checked with `node --check` and against the Go server:
+valid scans authenticate, tampered signatures get `401`, replays get `409`.
 
-1. `node --check` — syntax clean.
-2. Stubbed run — timestamp shape `yyyy-MM-dd HH:mm:ss`, signature
-   byte-identical to the server-spec `SHA256(isbn|timestamp|token)`,
-   loop re-enqueue + haptics fire.
-3. Live matrix against the Go server — tampered `401`, valid `502`
-   (authenticated; 502 only when the desktop client is offline),
-   replay `409`.
-
-On-device testing (Binary Eye handoff on real hardware) is still TODO —
-please report issues.
+Binary Eye handoff on real hardware is not yet tested — if you try it,
+please open an issue with your phone model and the result.

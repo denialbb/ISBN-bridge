@@ -1,15 +1,15 @@
 # Mobile Client Setup (iOS & Android)
 
 ![iOS Shortcuts](https://img.shields.io/badge/iOS-Shortcuts-black?logo=apple&logoColor=white)
-![Android planned](https://img.shields.io/badge/Android-planned-lightgrey?logo=android&logoColor=white)
+![Android HTTP Shortcuts](https://img.shields.io/badge/Android-HTTP_Shortcuts-green?logo=android&logoColor=white)
 
-This document describes how mobile scanning works with the ISBN Bridge pipeline, including iOS Shortcuts implementation and planned Android support.
+This document describes mobile scanning: the iOS Shortcuts flow and the Android HTTP Shortcuts flow.
 
 ---
 
 ## 1. iOS Shortcuts Implementation
 
-Scanning from an iPhone uses two lightweight, native Apple Shortcuts that require no third-party App Store applications:
+Scanning from an iPhone uses two Apple Shortcuts. No third-party App Store apps needed:
 
 ### Shortcut 1: Automatic Pairing Shortcut ("Pair ISBN Bridge")
 *Used once when starting a scanning session, changing Wi-Fi networks, or after token rotation.*
@@ -17,9 +17,9 @@ Scanning from an iPhone uses two lightweight, native Apple Shortcuts that requir
 1. **Receive Input**: Receives JSON config payload (`{"url":"...","token":"..."}`) passed directly from the browser or QR scanner.
 2. **Save File**: Writes the configuration dictionary directly to `Shortcuts/isbn_bridge_config.json` in iCloud Drive / On My iPhone (Overwrite: `true`).
 3. **Notification**: Vibrates device and shows confirmation ("Paired with PC at [url]").
-4. **Auto-Launch Scanner (Optional & Recommended)**: Calls action **"Run Shortcut"** targeting your Scanner Shortcut with *"Wait Until Finished"* disabled, followed by **"Exit Shortcut"**. This creates an end-to-end flow: pointing the camera at the PC immediately transitions straight into book scanning!
+4. **Auto-Launch Scanner (Optional & Recommended)**: Calls action **"Run Shortcut"** targeting your Scanner Shortcut with *"Wait Until Finished"* disabled, followed by **"Exit Shortcut"**. After pairing, the book scanner opens directly.
 
-> **Zero-Touch Camera Pairing**: Point your normal **iPhone Camera** at the centered QR code on your PC. Tap the yellow web link $\rightarrow$ Safari opens the pairing page and automatically launches the shortcut $\rightarrow$ tap **Open in Shortcuts** $\rightarrow$ configuration is saved and the book scanner launches immediately! No IP lookup or typing required.
+> **Camera Pairing**: Point your iPhone camera at the QR code on your PC. Tap the link, tap **Open in Shortcuts**, and the scanner opens. No IP lookup or typing needed.
 
 *Download: [Pair ISBN Bridge](https://www.icloud.com/shortcuts/2cc219d6251f46d69ce5d6d3f4ce8cc8)*
 
@@ -75,7 +75,7 @@ Scanning from an iPhone uses two lightweight, native Apple Shortcuts that requir
    - Point your iPhone's camera at the centered QR code on your monitor.
    - Tap the link, then tap **Open in Shortcuts** to save the configuration automatically.
 3. **Scan Books**:
-   - Run the **Scanner Shortcut**. The camera scanner opens in a loop. Point it at any book barcode; the ISBN will be validated, authenticated, and pasted onto your PC instantly.
+   - Run the **Scanner Shortcut**. The camera opens in a loop. Point it at any book barcode; the ISBN is checked and pasted on your PC.
 
 ---
 
@@ -83,7 +83,7 @@ Scanning from an iPhone uses two lightweight, native Apple Shortcuts that requir
 
 Android uses the same cryptographic protocol — no server changes needed:
 
-- **Protocol Compatibility**: Any client that can generate `SHA-256(ISBN|Timestamp|Token)` and send an HTTP POST request to port `8765` works seamlessly with the existing Go backend and AutoHotkey client.
+- **Protocol Compatibility**: Any client that can generate `SHA-256(ISBN|Timestamp|Token)` and POST it to port `8765` works with the Go backend and AutoHotkey client.
 - **Recommended app**: [HTTP Shortcuts](https://f-droid.org/packages/ch.rmy.android.http_shortcuts/) (free, open-source) with [Binary Eye](https://f-droid.org/packages/de.markusfisch.android.binaryeye/) as the barcode scanner backend.
 - **Setup**: [`mobile/android/SETUP.md`](../mobile/android/SETUP.md) — pair once via the `/pair` page (copy `url` + `token` into global variables), import the flow, scan.
 - **Scanner script**: [`mobile/android/scanner.js`](../mobile/android/scanner.js) — pre-execution script verified against the Go verifier (syntax, stubbed composition run, live 401/502/409 matrix).
