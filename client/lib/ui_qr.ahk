@@ -11,14 +11,14 @@ class QRModal {
             Download(AppConfig.goServerUrl "/qr.png", tempQR)
         } catch as err {
             Logger.Log("QRModal download failed: " err.Message)
-            TrayTip("Impossibile scaricare il QR code dal server Go.", "ISBN Bridge", "Iconx")
+            TrayTip(I18n.Get("qr_download_error"), I18n.Get("app_title"), "Iconx")
             return
         }
 
         this.Hide()
 
         ; Ultra-minimal, borderless floating QR card
-        this.guiInstance := Gui("+AlwaysOnTop -Caption +Border +ToolWindow", "ISBN Bridge")
+        this.guiInstance := Gui("+AlwaysOnTop -Caption +Border +ToolWindow", I18n.Get("app_title"))
         this.guiInstance.BackColor := "0xFFFFFF"
         this.guiInstance.MarginX := 16
         this.guiInstance.MarginY := 16
@@ -31,7 +31,7 @@ class QRModal {
 
         ; Minimal single-line hint
         this.guiInstance.SetFont("s8 norm c64748b", "Segoe UI")
-        hintCtrl := this.guiInstance.Add("Text", "Center w" size " y+8", "Inquadra per abbinare • Clic o ESC per chiudere")
+        hintCtrl := this.guiInstance.Add("Text", "Center w" size " y+8", I18n.Get("qr_hint"))
         hintCtrl.OnEvent("Click", (*) => this.Hide())
 
         this.guiInstance.OnEvent("Escape", (*) => this.Hide())

@@ -34,6 +34,10 @@ type Config struct {
 	QRAutoHideSeconds   int  // Seconds before hiding QR if unscanned, 0 to disable (default: 45)
 	QRPopupSize         int  // Width/height in pixels of the centered QR popup (default: 280)
 
+	// UI settings
+	Language  string // Interface language: "auto", "it", "en" (default: "auto")
+	SoundFile string // Sound sample file (default: "tap.wav")
+
 	FilePath string
 }
 
@@ -48,11 +52,13 @@ func Default() *Config {
 		OverwriteExistingText: true,
 		AutoPasteOnHover:      true,
 		PlayTapSound:          true,
+		SoundFile:             "tap.wav",
 		TooltipOffsetX:        10,
 		TooltipOffsetY:        12,
 		QRAutoShowOnRefresh:   true,
 		QRAutoHideSeconds:     45,
 		QRPopupSize:           280,
+		Language:              "auto",
 	}
 }
 
@@ -132,6 +138,10 @@ func LoadOrCreate(path string) (*Config, error) {
 			if n, err := strconv.Atoi(val); err == nil && n > 50 {
 				cfg.QRPopupSize = n
 			}
+		case "language":
+			cfg.Language = strings.ToLower(val)
+		case "sound_file":
+			cfg.SoundFile = val
 		}
 	}
 

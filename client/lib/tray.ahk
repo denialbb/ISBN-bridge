@@ -3,56 +3,68 @@
 class TrayManager {
     static expiryMenu := Menu()
     static soundMenu := Menu()
+    static languageMenu := Menu()
 
     static Init() {
         A_TrayMenu.Delete()
 
-        A_TrayMenu.Add("Attivo", (*) => this.ToggleEnabled())
+        A_TrayMenu.Add(I18n.Get("tray_active"), (*) => this.ToggleEnabled())
         A_TrayMenu.Add()
 
         ; Expiry duration submenu
         this.expiryMenu := Menu()
-        this.expiryMenu.Add("15 minuti", (*) => this.SetExpiry(15))
-        this.expiryMenu.Add("30 minuti", (*) => this.SetExpiry(30))
-        this.expiryMenu.Add("1 ora (60 min)", (*) => this.SetExpiry(60))
-        this.expiryMenu.Add("2 ore (120 min)", (*) => this.SetExpiry(120))
-        this.expiryMenu.Add("12 ore (720 min)", (*) => this.SetExpiry(720))
-        this.expiryMenu.Add("24 ore (1440 min)", (*) => this.SetExpiry(1440))
+        this.expiryMenu.Add(I18n.Get("tray_expiry_min", 15), (*) => this.SetExpiry(15))
+        this.expiryMenu.Add(I18n.Get("tray_expiry_min", 30), (*) => this.SetExpiry(30))
+        this.expiryMenu.Add(I18n.Get("tray_expiry_hour", 1, 60), (*) => this.SetExpiry(60))
+        this.expiryMenu.Add(I18n.Get("tray_expiry_hours", 2, 120), (*) => this.SetExpiry(120))
+        this.expiryMenu.Add(I18n.Get("tray_expiry_hours", 12, 720), (*) => this.SetExpiry(720))
+        this.expiryMenu.Add(I18n.Get("tray_expiry_hours", 24, 1440), (*) => this.SetExpiry(1440))
 
-        A_TrayMenu.Add("Scadenza token", this.expiryMenu)
+        A_TrayMenu.Add(I18n.Get("tray_expiry"), this.expiryMenu)
         A_TrayMenu.Add()
 
         ; Configurable options
-        A_TrayMenu.Add("Sovrascrivi testo (Ctrl+A)", (*) => this.ToggleOverwrite())
-        A_TrayMenu.Add("Auto-incolla al passaggio (senza clic)", (*) => this.ToggleAutoHover())
+        A_TrayMenu.Add(I18n.Get("tray_overwrite"), (*) => this.ToggleOverwrite())
+        A_TrayMenu.Add(I18n.Get("tray_auto_hover"), (*) => this.ToggleAutoHover())
 
         ; Sound sample submenu
         this.soundMenu := Menu()
-        this.soundMenu.Add("Tap (Morbido / Attuale)", (*) => this.SelectSound("tap.wav"))
-        this.soundMenu.Add("iOS Tock (Clic felpato)", (*) => this.SelectSound("sounds/ios_tock.wav"))
-        this.soundMenu.Add("Bubble Pop (Goccia / Pop morbido)", (*) => this.SelectSound("sounds/bubble_pop.wav"))
-        this.soundMenu.Add("Gentle Chime (Accordo marimba)", (*) => this.SelectSound("sounds/gentle_chime.wav"))
-        this.soundMenu.Add("Modern Beep (Scanner discreto)", (*) => this.SelectSound("sounds/modern_beep.wav"))
-        this.soundMenu.Add("Mechanical Click (Switch tastiera)", (*) => this.SelectSound("sounds/mechanical_click.wav"))
-        this.soundMenu.Add("Windows Navigation (Tick classico)", (*) => this.SelectSound("sounds/windows_navigation.wav"))
+        this.soundMenu.Add(I18n.Get("sound_tap"), (*) => this.SelectSound("tap.wav"))
+        this.soundMenu.Add(I18n.Get("sound_ios"), (*) => this.SelectSound("sounds/ios_tock.wav"))
+        this.soundMenu.Add(I18n.Get("sound_bubble"), (*) => this.SelectSound("sounds/bubble_pop.wav"))
+        this.soundMenu.Add(I18n.Get("sound_chime"), (*) => this.SelectSound("sounds/gentle_chime.wav"))
+        this.soundMenu.Add(I18n.Get("sound_beep"), (*) => this.SelectSound("sounds/modern_beep.wav"))
+        this.soundMenu.Add(I18n.Get("sound_click"), (*) => this.SelectSound("sounds/mechanical_click.wav"))
+        this.soundMenu.Add(I18n.Get("sound_nav"), (*) => this.SelectSound("sounds/windows_navigation.wav"))
         this.soundMenu.Add()
-        this.soundMenu.Add("Abilita suono", (*) => this.ToggleSound())
+        this.soundMenu.Add(I18n.Get("tray_sound_enable"), (*) => this.ToggleSound())
 
-        A_TrayMenu.Add("Suono feedback", this.soundMenu)
-        A_TrayMenu.Add("Mostra QR code al cambio token", (*) => this.ToggleAutoQR())
+        A_TrayMenu.Add(I18n.Get("tray_sound"), this.soundMenu)
+        A_TrayMenu.Add(I18n.Get("tray_auto_qr"), (*) => this.ToggleAutoQR())
+        A_TrayMenu.Add()
+
+        ; Language submenu
+        this.languageMenu := Menu()
+        this.languageMenu.Add(I18n.Get("lang_auto"), (*) => I18n.SetLanguage("auto"))
+        this.languageMenu.Add()
+        this.languageMenu.Add(I18n.Get("lang_it"), (*) => I18n.SetLanguage("it"))
+        this.languageMenu.Add(I18n.Get("lang_en"), (*) => I18n.SetLanguage("en"))
+
+        A_TrayMenu.Add(I18n.Get("tray_language"), this.languageMenu)
         A_TrayMenu.Add()
 
         ; Quick actions
-        A_TrayMenu.Add("Mostra QR code al centro", (*) => QRModal.Show())
-        A_TrayMenu.Default := "Mostra QR code al centro"
+        showQRLabel := I18n.Get("tray_show_qr")
+        A_TrayMenu.Add(showQRLabel, (*) => QRModal.Show())
+        A_TrayMenu.Default := showQRLabel
         A_TrayMenu.ClickCount := 1
-        A_TrayMenu.Add("Reset token (Nuovo QR)", (*) => this.ResetToken())
-        A_TrayMenu.Add("Apri scanner.conf", (*) => Run(AppConfig.filePath))
-        A_TrayMenu.Add("Svuota ISBN in sospeso", (*) => PasteEngine.Cancel())
-        A_TrayMenu.Add("Apri log debug", (*) => Logger.Open())
+        A_TrayMenu.Add(I18n.Get("tray_reset_token"), (*) => this.ResetToken())
+        A_TrayMenu.Add(I18n.Get("tray_open_conf"), (*) => Run(AppConfig.filePath))
+        A_TrayMenu.Add(I18n.Get("tray_clear_isbn"), (*) => PasteEngine.Cancel())
+        A_TrayMenu.Add(I18n.Get("tray_open_log"), (*) => Logger.Open())
         A_TrayMenu.Add()
 
-        A_TrayMenu.Add("Esci", (*) => ExitApp())
+        A_TrayMenu.Add(I18n.Get("tray_exit"), (*) => ExitApp())
 
         this.UpdateState()
     }
@@ -60,7 +72,8 @@ class TrayManager {
     static ToggleEnabled() {
         PasteEngine.enabled := !PasteEngine.enabled
         this.UpdateState()
-        TrayTip(PasteEngine.enabled ? "Auto-incolla attivo." : "Auto-incolla disattivato.", "ISBN Bridge")
+        tipMsg := PasteEngine.enabled ? I18n.Get("tray_active_tip_on") : I18n.Get("tray_active_tip_off")
+        TrayTip(tipMsg, I18n.Get("app_title"))
         if !PasteEngine.enabled
             PasteEngine.Cancel()
     }
@@ -69,21 +82,24 @@ class TrayManager {
         AppConfig.overwriteExistingText := !AppConfig.overwriteExistingText
         AppConfig.Save("AutoPaste", "overwrite_existing_text", AppConfig.overwriteExistingText ? "true" : "false")
         this.UpdateState()
-        TrayTip(AppConfig.overwriteExistingText ? "Sovrascrittura testo attiva." : "Sovrascrittura testo disattivata.", "ISBN Bridge")
+        tipMsg := AppConfig.overwriteExistingText ? I18n.Get("tray_overwrite_tip_on") : I18n.Get("tray_overwrite_tip_off")
+        TrayTip(tipMsg, I18n.Get("app_title"))
     }
 
     static ToggleAutoHover() {
         AppConfig.autoPasteOnHover := !AppConfig.autoPasteOnHover
         AppConfig.Save("AutoPaste", "auto_paste_on_hover", AppConfig.autoPasteOnHover ? "true" : "false")
         this.UpdateState()
-        TrayTip(AppConfig.autoPasteOnHover ? "Auto-incolla al passaggio attivo." : "Auto-incolla al passaggio disattivato.", "ISBN Bridge")
+        tipMsg := AppConfig.autoPasteOnHover ? I18n.Get("tray_auto_hover_tip_on") : I18n.Get("tray_auto_hover_tip_off")
+        TrayTip(tipMsg, I18n.Get("app_title"))
     }
 
     static ToggleSound() {
         AppConfig.playTapSoundEnabled := !AppConfig.playTapSoundEnabled
         AppConfig.Save("AutoPaste", "play_tap_sound", AppConfig.playTapSoundEnabled ? "true" : "false")
         this.UpdateState()
-        TrayTip(AppConfig.playTapSoundEnabled ? "Suono feedback attivo." : "Suono feedback disattivato.", "ISBN Bridge")
+        tipMsg := AppConfig.playTapSoundEnabled ? I18n.Get("tray_sound_tip_on") : I18n.Get("tray_sound_tip_off")
+        TrayTip(tipMsg, I18n.Get("app_title"))
     }
 
     static SelectSound(path) {
@@ -107,10 +123,10 @@ class TrayManager {
             req.open("POST", AppConfig.goServerUrl "/token/ttl?minutes=" minutes, false)
             req.send()
 
-            TrayTip("Scadenza token impostata a " minutes " minuti.`nNuovo QR generato!", "ISBN Bridge")
+            TrayTip(I18n.Get("tray_expiry_set_tip", minutes), I18n.Get("app_title"))
             QRModal.Show()
         } catch {
-            TrayTip("Scadenza salvata nel file di configurazione.", "ISBN Bridge")
+            TrayTip(I18n.Get("tray_expiry_saved_tip"), I18n.Get("app_title"))
         }
     }
 
@@ -120,29 +136,29 @@ class TrayManager {
             req.open("POST", AppConfig.goServerUrl "/token/refresh", false)
             req.send()
 
-            TrayTip("Token reimpostato con successo!`nNuovo QR generato.", "ISBN Bridge")
+            TrayTip(I18n.Get("tray_reset_token_success"), I18n.Get("app_title"))
             QRModal.Show()
         } catch as err {
-            TrayTip("Errore di contatto col server Go su " AppConfig.goServerUrl, "ISBN Bridge", "Iconx")
+            TrayTip(I18n.Get("tray_reset_token_error", AppConfig.goServerUrl), I18n.Get("app_title"), "Iconx")
         }
     }
 
     static UpdateState() {
-        A_TrayMenu.Uncheck("Attivo")
+        A_TrayMenu.Uncheck(I18n.Get("tray_active"))
         if PasteEngine.enabled
-            A_TrayMenu.Check("Attivo")
+            A_TrayMenu.Check(I18n.Get("tray_active"))
 
-        A_TrayMenu.Uncheck("Sovrascrivi testo (Ctrl+A)")
+        A_TrayMenu.Uncheck(I18n.Get("tray_overwrite"))
         if AppConfig.overwriteExistingText
-            A_TrayMenu.Check("Sovrascrivi testo (Ctrl+A)")
+            A_TrayMenu.Check(I18n.Get("tray_overwrite"))
 
-        A_TrayMenu.Uncheck("Auto-incolla al passaggio (senza clic)")
+        A_TrayMenu.Uncheck(I18n.Get("tray_auto_hover"))
         if AppConfig.autoPasteOnHover
-            A_TrayMenu.Check("Auto-incolla al passaggio (senza clic)")
+            A_TrayMenu.Check(I18n.Get("tray_auto_hover"))
 
-        this.soundMenu.Uncheck("Abilita suono")
+        this.soundMenu.Uncheck(I18n.Get("tray_sound_enable"))
         if AppConfig.playTapSoundEnabled
-            this.soundMenu.Check("Abilita suono")
+            this.soundMenu.Check(I18n.Get("tray_sound_enable"))
 
         soundFiles := [
             "tap.wav",
@@ -154,13 +170,13 @@ class TrayManager {
             "sounds/windows_navigation.wav"
         ]
         soundLabels := [
-            "Tap (Morbido / Attuale)",
-            "iOS Tock (Clic felpato)",
-            "Bubble Pop (Goccia / Pop morbido)",
-            "Gentle Chime (Accordo marimba)",
-            "Modern Beep (Scanner discreto)",
-            "Mechanical Click (Switch tastiera)",
-            "Windows Navigation (Tick classico)"
+            I18n.Get("sound_tap"),
+            I18n.Get("sound_ios"),
+            I18n.Get("sound_bubble"),
+            I18n.Get("sound_chime"),
+            I18n.Get("sound_beep"),
+            I18n.Get("sound_click"),
+            I18n.Get("sound_nav")
         ]
 
         Loop soundFiles.Length {
@@ -169,12 +185,31 @@ class TrayManager {
                 this.soundMenu.Check(soundLabels[A_Index])
         }
 
-        A_TrayMenu.Uncheck("Mostra QR code al cambio token")
+        ; Language checkmarks
+        this.languageMenu.Uncheck(I18n.Get("lang_auto"))
+        this.languageMenu.Uncheck(I18n.Get("lang_it"))
+        this.languageMenu.Uncheck(I18n.Get("lang_en"))
+
+        if (I18n.langPreference = "auto")
+            this.languageMenu.Check(I18n.Get("lang_auto"))
+        else if (I18n.langPreference = "it")
+            this.languageMenu.Check(I18n.Get("lang_it"))
+        else if (I18n.langPreference = "en")
+            this.languageMenu.Check(I18n.Get("lang_en"))
+
+        A_TrayMenu.Uncheck(I18n.Get("tray_auto_qr"))
         if AppConfig.qrAutoShowOnRefresh
-            A_TrayMenu.Check("Mostra QR code al cambio token")
+            A_TrayMenu.Check(I18n.Get("tray_auto_qr"))
 
         options := [15, 30, 60, 120, 720, 1440]
-        labels := ["15 minuti", "30 minuti", "1 ora (60 min)", "2 ore (120 min)", "12 ore (720 min)", "24 ore (1440 min)"]
+        labels := [
+            I18n.Get("tray_expiry_min", 15),
+            I18n.Get("tray_expiry_min", 30),
+            I18n.Get("tray_expiry_hour", 1, 60),
+            I18n.Get("tray_expiry_hours", 2, 120),
+            I18n.Get("tray_expiry_hours", 12, 720),
+            I18n.Get("tray_expiry_hours", 24, 1440)
+        ]
 
         Loop options.Length {
             this.expiryMenu.Uncheck(labels[A_Index])

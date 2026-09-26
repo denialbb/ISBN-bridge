@@ -17,8 +17,8 @@ class PasteEngine {
         }
 
         this.pendingISBN := isbn
-        FollowToolTip.Show("ISBN pronto: " isbn "`nClicca nel campo di testo per incollarlo.`nESC per annullare.")
-        TrayTip("ISBN pronto: " isbn, "ISBN Bridge")
+        FollowToolTip.Show(I18n.Get("isbn_ready_tooltip", isbn))
+        TrayTip(I18n.Get("isbn_ready_tray", isbn), I18n.Get("app_title"))
     }
 
     static HandleLeftClick() {
@@ -73,7 +73,7 @@ class PasteEngine {
             SendInput("^v")
 
             SoundManager.PlayTap()
-            FollowToolTip.Flash("ISBN incollato: " isbn)
+            FollowToolTip.Flash(I18n.Get("isbn_pasted_tooltip", isbn))
 
         } finally {
             SetTimer(() => (PasteEngine.suppressClipboard := false), -300)

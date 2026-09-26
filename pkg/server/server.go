@@ -178,30 +178,53 @@ func (s *Server) handleGetQRHTML(w http.ResponseWriter, r *http.Request) {
 
 	b64 := base64.StdEncoding.EncodeToString(png)
 	token, _ := s.tokenMgr.GetToken()
+	lang := s.detectLanguage(r)
+
+	subtitle := "Inquadra con la fotocamera per abbinare"
+	tokenNote := "Token attivo: " + token[:8] + "..."
+	if lang == "en" {
+		subtitle = "Scan with phone camera to pair"
+		tokenNote = "Active token: " + token[:8] + "..."
+	}
+
+	itClass := "lang-btn"
+	enClass := "lang-btn"
+	if lang == "it" {
+		itClass += " active"
+	} else {
+		enClass += " active"
+	}
 
 	html := fmt.Sprintf(`<!DOCTYPE html>
-<html lang="en">
+<html lang="%s">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ISBN Bridge - Pairing</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #0f172a; color: #f8fafc; }
-    .card { background: #1e293b; max-width: 360px; width: 90%%; padding: 28px 20px; border-radius: 20px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3); border: 1px solid #334155; }
-    img { width: 240px; height: 240px; border-radius: 12px; margin: 16px auto; background: white; padding: 8px; display: block; }
+    .card { background: #1e293b; max-width: 360px; width: 90%%; padding: 24px 20px; border-radius: 20px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3); border: 1px solid #334155; position: relative; }
+    .lang-bar { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 8px; }
+    .lang-btn { font-size: 11px; padding: 3px 8px; border-radius: 6px; text-decoration: none; color: #94a3b8; background: #0f172a; border: 1px solid #334155; font-weight: 600; }
+    .lang-btn.active { color: #ffffff; background: #2563eb; border-color: #3b82f6; }
+    img { width: 240px; height: 240px; border-radius: 12px; margin: 14px auto; background: white; padding: 8px; display: block; }
     h2 { font-size: 1.15rem; font-weight: 600; margin: 0 0 6px 0; }
     p { font-size: 0.85rem; color: #94a3b8; margin: 0; }
   </style>
 </head>
 <body>
   <div class="card">
+    <div class="lang-bar">
+      <a href="?lang=it" class="%s">🇮🇹 IT</a>
+      <a href="?lang=en" class="%s">🇬🇧 EN</a>
+    </div>
     <h2>ISBN Bridge</h2>
-    <p>Inquadra con la fotocamera per abbinare</p>
+    <p>%s</p>
     <img src="data:image/png;base64,%s" alt="QR Code" />
-    <p style="font-size: 0.75rem; color: #64748b;">Token attivo: %s</p>
+    <p style="font-size: 0.75rem; color: #64748b;">%s</p>
   </div>
 </body>
-</html>`, b64, token[:8]+"...")
+</html>`, lang, itClass, enClass, subtitle, b64, tokenNote)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -295,6 +318,22 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/qr", http.StatusTemporaryRedirect)
 }
 
+func (s *Server) detectLanguage(r *http.Request) string {
+	if q := strings.ToLower(r.URL.Query().Get("lang")); q == "it" || q == "en" {
+		return q
+	}
+	if s.appConfig != nil {
+		if l := strings.ToLower(s.appConfig.Language); l == "it" || l == "en" {
+			return l
+		}
+	}
+	accept := strings.ToLower(r.Header.Get("Accept-Language"))
+	if strings.Contains(accept, "it") {
+		return "it"
+	}
+	return "en"
+}
+
 func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 	activeToken, err := s.tokenMgr.GetToken()
 	if err != nil {
@@ -333,6 +372,9 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	lang := s.detectLanguage(r)
+	isIT := lang == "it"
+
 	ua := r.UserAgent()
 	isIOS := strings.Contains(ua, "iPhone") || strings.Contains(ua, "iPad") || strings.Contains(ua, "iPod")
 	isAndroid := strings.Contains(ua, "Android")
@@ -342,9 +384,38 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 	altShortcutURI := fmt.Sprintf("shortcuts://run-shortcut?name=ISBN%%20Bridge%%20Pair&input=text&text=%s", escapedJSON)
 
 	badgeHTML := `<div class="badge"><span class="dot"></span> Server Connected</div>`
-	if tokenMismatch {
-		badgeHTML = `<div class="badge warn"><span class="dot"></span> Token Refreshed (Updated)</div>`
+	if isIT {
+		badgeHTML = `<div class="badge"><span class="dot"></span> Server Connesso</div>`
 	}
+	if tokenMismatch {
+		if isIT {
+			badgeHTML = `<div class="badge warn"><span class="dot"></span> Token Aggiornato</div>`
+		} else {
+			badgeHTML = `<div class="badge warn"><span class="dot"></span> Token Refreshed (Updated)</div>`
+		}
+	}
+
+	title := "ISBN Bridge Pairing"
+	desc := "Connecting your mobile barcode scanner to your PC desktop session."
+	serverLabel := "Server Host:"
+	ttlLabel := "Token TTL:"
+	toastMsg := "✅ Config copied to clipboard!"
+	if isIT {
+		title = "Abbinamento ISBN Bridge"
+		desc = "Collega lo scanner del tuo telefono al computer."
+		serverLabel = "Indirizzo Server:"
+		ttlLabel = "Validità Token:"
+		toastMsg = "✅ Configurazione copiata negli appunti!"
+	}
+
+	itClass := "lang-btn"
+	enClass := "lang-btn"
+	if isIT {
+		itClass += " active"
+	} else {
+		enClass += " active"
+	}
+	langBar := fmt.Sprintf(`<div class="lang-bar"><a href="?lang=it&token=%s" class="%s">🇮🇹 IT</a><a href="?lang=en&token=%s" class="%s">🇬🇧 EN</a></div>`, url.QueryEscape(tokenParam), itClass, url.QueryEscape(tokenParam), enClass)
 
 	autoRedirectScript := ""
 	actionSection := ""
@@ -359,34 +430,61 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
     };
   </script>`, primaryShortcutURI)
 
+		iosPrimary := "⚡ Tap to Pair iPhone"
+		iosAlt := "Alternate: Run \"ISBN Bridge Pair\""
+		iosSub := "If Safari asks, tap <strong>Open in Shortcuts</strong> to finish pairing."
+		if isIT {
+			iosPrimary = "⚡ Tocca per abbinare iPhone"
+			iosAlt = "Alternativo: Avvia \"ISBN Bridge Pair\""
+			iosSub = "Se Safari lo richiede, tocca <strong>Apri in Comandi Rapidi</strong> per completare l'abbinamento."
+		}
+
 		actionSection = fmt.Sprintf(`
-    <a href=%q class="btn btn-primary">⚡ Tap to Pair iPhone</a>
-    <a href=%q class="btn btn-secondary">Alternate: Run "ISBN Bridge Pair"</a>
-    <p class="subtext">If Safari asks, tap <strong>Open in Shortcuts</strong> to finish pairing.</p>
-`, primaryShortcutURI, altShortcutURI)
+    <a href=%q class="btn btn-primary">%s</a>
+    <a href=%q class="btn btn-secondary">%s</a>
+    <p class="subtext">%s</p>
+`, primaryShortcutURI, iosPrimary, altShortcutURI, iosAlt, iosSub)
 	} else if isAndroid {
+		andCopy := "📋 Copy Config JSON"
+		andDownload := "💾 Download Config File"
+		andSub := "Use in Tasker, HTTP Shortcuts, or your scanner automation app."
+		if isIT {
+			andCopy = "📋 Copia JSON Configurazione"
+			andDownload = "💾 Scarica File di Configurazione"
+			andSub = "Da usare in Tasker, HTTP Shortcuts o app di scansione."
+		}
+
 		actionSection = fmt.Sprintf(`
-    <button class="btn btn-primary" onclick="copyConfig()">📋 Copy Config JSON</button>
-    <a href="data:application/json;charset=utf-8,%s" download="isbn_bridge_config.json" class="btn btn-secondary">💾 Download Config File</a>
-    <p class="subtext">Use in Tasker, HTTP Shortcuts, or your scanner automation app.</p>
-`, url.PathEscape(configJSON))
+    <button class="btn btn-primary" onclick="copyConfig()">%s</button>
+    <a href="data:application/json;charset=utf-8,%s" download="isbn_bridge_config.json" class="btn btn-secondary">%s</a>
+    <p class="subtext">%s</p>
+`, andCopy, url.PathEscape(configJSON), andDownload, andSub)
 	} else {
+		launchText := "⚡ Launch iOS Shortcut"
+		copyText := "📋 Copy Config JSON"
+		if isIT {
+			launchText = "⚡ Avvia Comando Rapido iOS"
+			copyText = "📋 Copia JSON Configurazione"
+		}
 		actionSection = fmt.Sprintf(`
-    <a href=%q class="btn btn-primary">⚡ Launch iOS Shortcut</a>
-    <button class="btn btn-secondary" onclick="copyConfig()">📋 Copy Config JSON</button>
-`, primaryShortcutURI)
+    <a href=%q class="btn btn-primary">%s</a>
+    <button class="btn btn-secondary" onclick="copyConfig()">%s</button>
+`, primaryShortcutURI, launchText, copyText)
 	}
 
 	templateHTML := `<!DOCTYPE html>
-<html lang="en">
+<html lang="` + lang + `">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Pair with ISBN Bridge</title>
+  <title>` + title + `</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 24px 16px; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-    .card { background: #1e293b; width: 100%; max-width: 440px; border-radius: 20px; padding: 28px 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); border: 1px solid #334155; text-align: center; }
+    .card { background: #1e293b; width: 100%; max-width: 440px; border-radius: 20px; padding: 24px 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); border: 1px solid #334155; text-align: center; }
+    .lang-bar { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 12px; }
+    .lang-btn { font-size: 11px; padding: 4px 9px; border-radius: 6px; text-decoration: none; color: #94a3b8; background: #0f172a; border: 1px solid #334155; font-weight: 600; }
+    .lang-btn.active { color: #ffffff; background: #2563eb; border-color: #3b82f6; }
     .badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; margin-bottom: 16px; background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
     .badge.warn { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border-color: rgba(245, 158, 11, 0.3); }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
@@ -409,23 +507,24 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 </head>
 <body>
   <div class="card">
+    {{LANG_BAR}}
     {{BADGE}}
-    <h1>ISBN Bridge Pairing</h1>
-    <p class="desc">Connecting your mobile barcode scanner to your PC desktop session.</p>
+    <h1>` + title + `</h1>
+    <p class="desc">` + desc + `</p>
 
     {{ACTIONS}}
 
     <div class="info-box">
       <div class="info-row">
-        <span class="info-label">Server Host:</span>
+        <span class="info-label">` + serverLabel + `</span>
         <span class="info-val">{{SERVER_URL}}</span>
       </div>
       <div class="info-row">
-        <span class="info-label">Token TTL:</span>
+        <span class="info-label">` + ttlLabel + `</span>
         <span class="info-val">{{TTL_MINUTES}} min</span>
       </div>
     </div>
-    <div id="toast">✅ Config copied to clipboard!</div>
+    <div id="toast">` + toastMsg + `</div>
   </div>
 
   <script>
@@ -443,6 +542,7 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 
 	replacer := strings.NewReplacer(
 		"{{AUTO_REDIRECT}}", autoRedirectScript,
+		"{{LANG_BAR}}", langBar,
 		"{{BADGE}}", badgeHTML,
 		"{{ACTIONS}}", actionSection,
 		"{{SERVER_URL}}", serverURL,
