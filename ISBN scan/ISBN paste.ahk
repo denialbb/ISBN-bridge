@@ -15,6 +15,13 @@ CoordMode("Mouse", "Screen")
 
 global TARGET_TAB_TITLE := "hardcover"
 global HTTP_PORT := 8766
+global GO_SERVER_URL := "http://127.0.0.1:8765"
+
+; Options
+global overwriteExistingText := true
+global playTapSoundEnabled := true
+global TOOLTIP_OFFSET_X := 10
+global TOOLTIP_OFFSET_Y := 12
 
 ; Replace this with your actual token or use 'Generate Token.ahk'
 global TOKEN_FILE := A_ScriptDir "\token.txt"
@@ -106,13 +113,30 @@ CreateTrayMenu() {
     A_TrayMenu.Add()
 
     A_TrayMenu.Add(
-        "Svuota ISBN",
-        CancelISBN
+        "Sovrascrivi testo (Ctrl+A)",
+        ToggleOverwrite
     )
 
     A_TrayMenu.Add(
-        "Genera nuovo token",
-        (*) => Run('"' A_AhkPath '" "' A_ScriptDir '\Generate Token.ahk"')
+        "Suono al tocco (Tap)",
+        ToggleSound
+    )
+
+    A_TrayMenu.Add()
+
+    A_TrayMenu.Add(
+        "Reset token (Nuovo QR)",
+        ResetToken
+    )
+
+    A_TrayMenu.Add(
+        "Apri pagina QR nel browser",
+        OpenQRPage
+    )
+
+    A_TrayMenu.Add(
+        "Svuota ISBN",
+        CancelISBN
     )
 
     A_TrayMenu.Add(
@@ -152,13 +176,91 @@ ToggleEnabled(*) {
 }
 
 
+ToggleOverwrite(*) {
+    global overwriteExistingText
+
+    overwriteExistingText := !overwriteExistingText
+    UpdateTrayState()
+
+    TrayTip(
+        overwriteExistingText ? "Sovrascrittura testo attiva." : "Sovrascrittura testo disattivata.",
+        "Biblios"
+    )
+}
+
+
+ToggleSound(*) {
+    global playTapSoundEnabled
+
+    playTapSoundEnabled := !playTapSoundEnabled
+    UpdateTrayState()
+
+    TrayTip(
+        playTapSoundEnabled ? "Suono al tocco attivo." : "Suono al tocco disattivato.",
+        "Biblios"
+    )
+}
+
+
+ResetToken(*) {
+    global GO_SERVER_URL
+
+    try {
+        req := ComObject("MSXML2.XMLHTTP")
+        req.open("POST", GO_SERVER_URL "/token/refresh", false)
+        req.setRequestHeader("Accept", "application/json")
+        req.send()
+
+        if (req.status = 200 || req.status = 303) {
+            TrayTip(
+                "Token reimpostato con successo!`nNuovo QR generato.",
+                "Biblios"
+            )
+            Run(GO_SERVER_URL "/qr")
+        } else {
+            TrayTip(
+                "Errore server Go: " req.status,
+                "Biblios",
+                "Iconx"
+            )
+        }
+    } catch as err {
+        tokenScript := A_ScriptDir "\Generate Token.ahk"
+        if FileExist(tokenScript) {
+            Run('"' A_AhkPath '" "' tokenScript '"')
+        } else {
+            MsgBox(
+                "Impossibile contattare il server Go su " GO_SERVER_URL ":`n" err.Message,
+                "Biblios",
+                "Iconx"
+            )
+        }
+    }
+}
+
+
+OpenQRPage(*) {
+    global GO_SERVER_URL
+    Run(GO_SERVER_URL "/qr")
+}
+
+
 UpdateTrayState() {
     global enabled
+    global overwriteExistingText
+    global playTapSoundEnabled
 
     A_TrayMenu.Uncheck("Attivo")
-
     if enabled
         A_TrayMenu.Check("Attivo")
+
+    A_TrayMenu.Uncheck("Sovrascrivi testo (Ctrl+A)")
+    if overwriteExistingText
+        A_TrayMenu.Check("Sovrascrivi testo (Ctrl+A)")
+
+    A_TrayMenu.Uncheck("Suono al tocco (Tap)")
+    if playTapSoundEnabled
+        A_TrayMenu.Check("Suono al tocco (Tap)")
 }
 
 
@@ -253,13 +355,32 @@ ArmISBN(isbn) {
     global tipHwnd
     global lastX
     global lastY
+    global TARGET_TAB_TITLE
+    global TOOLTIP_OFFSET_X
+    global TOOLTIP_OFFSET_Y
 
+    ; Feature 1: If mouse is already hovering over an input field in the target window,
+    ; automatically insert the ISBN without requiring a click!
+    MouseGetPos(&mx, &my, &windowID)
+    title := ""
+    if windowID {
+        try title := WinGetTitle("ahk_id " windowID)
+    }
+
+    isTargetWindow := (TARGET_TAB_TITLE = "") || InStr(title, TARGET_TAB_TITLE, false)
+    isHoveringText := (A_Cursor = "IBeam")
+
+    if (isTargetWindow && isHoveringText) {
+        AutoPasteHovered(isbn)
+        return
+    }
+
+    ; Otherwise, arm for manual click
     pendingISBN := isbn
 
     ; Cancel any pending auto-hide timer from a previous paste.
     SetTimer(ClearToolTip, 0)
 
-    MouseGetPos(&mx, &my)
     lastX := mx
     lastY := my
 
@@ -268,8 +389,8 @@ ArmISBN(isbn) {
         "ISBN pronto: " isbn "`n"
         "Clicca nel campo di testo per incollarlo.`n"
         "ESC per annullare.",
-        mx + 20,
-        my + 20
+        mx + TOOLTIP_OFFSET_X,
+        my + TOOLTIP_OFFSET_Y
     )
 
     SetTimer(UpdateFollowToolTip, 16)
@@ -281,11 +402,65 @@ ArmISBN(isbn) {
 }
 
 
+AutoPasteHovered(isbn) {
+    global suppressClipboard
+    global overwriteExistingText
+    global TOOLTIP_OFFSET_X
+    global TOOLTIP_OFFSET_Y
+    global tipHwnd
+    global lastX
+    global lastY
+    global pendingISBN
+
+    suppressClipboard := true
+
+    try {
+        SetTimer(UpdateFollowToolTip, 0)
+        tipHwnd := 0
+        lastX := -1
+        lastY := -1
+        pendingISBN := ""
+
+        ; Click to focus the hovered input field
+        Click()
+        Sleep(40)
+
+        A_Clipboard := isbn
+        Sleep(30)
+
+        ; Select all existing text if overwrite option is active
+        if overwriteExistingText {
+            SendInput("^a")
+            Sleep(25)
+        }
+        SendInput("^v")
+
+        PlayTapSound()
+
+        MouseGetPos(&mx, &my)
+        ToolTip("ISBN incollato: " isbn, mx + TOOLTIP_OFFSET_X, my + TOOLTIP_OFFSET_Y)
+
+        SetTimer(
+            ClearToolTip,
+            -1200
+        )
+
+    } finally {
+        SetTimer(
+            ReleaseClipboardSuppression,
+            -300
+        )
+    }
+}
+
+
 UpdateFollowToolTip() {
     global pendingISBN
     global tipHwnd
     global lastX
     global lastY
+    global TOOLTIP_OFFSET_X
+    global TOOLTIP_OFFSET_Y
 
     if (pendingISBN = "" || !tipHwnd) {
         SetTimer(UpdateFollowToolTip, 0)
@@ -301,14 +476,14 @@ UpdateFollowToolTip() {
     lastX := mx
     lastY := my
 
-    ; Move the existing tooltip window natively without redrawing text.
+    ; Move the existing tooltip window natively closer to the cursor.
     ; 0x0015 = SWP_NOSIZE (0x0001) | SWP_NOZORDER (0x0004) | SWP_NOACTIVATE (0x0010)
     DllCall(
         "User32.dll\SetWindowPos",
         "Ptr", tipHwnd,
         "Ptr", 0,
-        "Int", mx + 20,
-        "Int", my + 20,
+        "Int", mx + TOOLTIP_OFFSET_X,
+        "Int", my + TOOLTIP_OFFSET_Y,
         "Int", 0,
         "Int", 0,
         "UInt", 0x0015
@@ -391,6 +566,9 @@ PastePendingISBN(isbn, wasIBeam) {
     global tipHwnd
     global lastX
     global lastY
+    global overwriteExistingText
+    global TOOLTIP_OFFSET_X
+    global TOOLTIP_OFFSET_Y
 
     ; User may have cancelled or armed a new ISBN during the 100 ms delay.
     if (pendingISBN != isbn)
@@ -413,13 +591,17 @@ PastePendingISBN(isbn, wasIBeam) {
         A_Clipboard := isbn
         Sleep(40)
 
-        ; Select all existing text in the input box and paste over it.
-        SendInput("^a")
-        Sleep(30)
+        ; Select all existing text in the input box if overwrite is enabled.
+        if overwriteExistingText {
+            SendInput("^a")
+            Sleep(25)
+        }
         SendInput("^v")
 
+        PlayTapSound()
+
         MouseGetPos(&mx, &my)
-        ToolTip("ISBN incollato: " isbn, mx + 20, my + 20)
+        ToolTip("ISBN incollato: " isbn, mx + TOOLTIP_OFFSET_X, my + TOOLTIP_OFFSET_Y)
 
         SetTimer(
             ClearToolTip,
@@ -431,6 +613,25 @@ PastePendingISBN(isbn, wasIBeam) {
             ReleaseClipboardSuppression,
             -300
         )
+    }
+}
+
+
+PlayTapSound() {
+    global playTapSoundEnabled
+
+    if !playTapSoundEnabled
+        return
+
+    tapFile := A_ScriptDir "\tap.wav"
+    if FileExist(tapFile) {
+        SoundPlay(tapFile)
+    } else {
+        navSound := A_WinDir "\Media\Windows Navigation Start.wav"
+        if FileExist(navSound)
+            SoundPlay(navSound)
+        else
+            SoundPlay("*-1")
     }
 }
 
