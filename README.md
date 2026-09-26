@@ -84,21 +84,27 @@ For full setup instructions, see [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 
 ## Quick Start
 
-### 1. Start the Go Server
+### Recommended: download the release
+
+1. Get `ISBN-Bridge-v1.0.0-windows-x64.zip` from the
+   [Releases page](https://github.com/denialbb/ISBN-bridge/releases) and
+   extract it anywhere (e.g. `Documents\ISBN-Bridge`).
+2. Double-click **`ISBN-Bridge.exe`** — it starts the server automatically
+   and shows the pairing QR code in the center of your screen.
+3. (Optional) Press `Win+R`, type `shell:startup`, and drop a shortcut to
+   `ISBN-Bridge.exe` there to start it with Windows.
+
+### From source
 
 ```powershell
-# Windows binary
-.\bin\isbn-bridge-server.exe
+# Build the server
+go build -o bin/isbn-bridge-server.exe ./cmd/server
+
+# Run the desktop client (requires AutoHotkey v2)
+& "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" "client\main.ahk"
 ```
 
-### 2. Start the AutoHotkey Client
-
-```powershell
-# AutoHotkey v2
-& "client\main.ahk"
-```
-
-### 3. Pair & Scan
+### Pair & Scan
 
 1. When the Go server starts, a QR code appears in the center of your screen.
 2. Point your phone's normal **Camera app** at the QR code and tap the link to pair automatically (no typing required!).
