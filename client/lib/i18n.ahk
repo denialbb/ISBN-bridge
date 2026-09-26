@@ -1,30 +1,150 @@
 #Requires AutoHotkey v2.0
 
+; Data-driven UI strings. Translations live in lang/*.ini next to the
+; executable (compiled release) or under client/lang (dev). To add a
+; language, drop in one INI file — see client/lang/en.ini for the format.
+; English (en.ini) is required and is the fallback for missing keys.
+
 class I18n {
     static langPreference := "auto"
     static activeLang := "en"
-    static dict := Map()
+    static dict := Map()      ; code -> Map(key -> text)
+    static langNames := Map() ; code -> display name from [meta]
+    static langIds := Map()   ; code -> primary OS language ID from [meta]
+    static langDir := ""
 
     static Init() {
-        this.SetupDictionary()
+        this.langDir := this.FindLangDir()
+        this.LoadLanguages()
         this.langPreference := (AppConfig.language != "") ? AppConfig.language : "auto"
         this.ResolveActiveLanguage()
     }
 
+    static FindLangDir() {
+        ; Test hook: point at a scratch dir without touching the repo.
+        if (override := EnvGet("ISBN_BRIDGE_LANG_DIR")) != "" && FileExist(override "\en.ini")
+            return override
+        ; Compiled release layout is flat (lang/ next to the exe).
+        if FileExist(A_ScriptDir "\lang\en.ini")
+            return A_ScriptDir "\lang"
+        ; Dev layouts.
+        if FileExist(A_ScriptDir "\client\lang\en.ini")
+            return A_ScriptDir "\client\lang"
+        if FileExist(A_ScriptDir "\..\client\lang\en.ini")
+            return A_ScriptDir "\..\client\lang"
+        return A_ScriptDir "\lang"
+    }
+
+    static DiscoverCodes() {
+        codes := ["en"]
+        Loop Files, this.langDir "\*.ini" {
+            name := A_LoopFileName
+            ext := A_LoopFileExt
+            code := StrLower(SubStr(name, 1, StrLen(name) - StrLen(ext) - 1))
+            if (code != "en" && RegExMatch(code, "^[a-z]{2,5}$"))
+                codes.Push(code)
+        }
+        return codes
+    }
+
+    ; Custom INI reader. The Win32 INI API (IniRead) silently drops the
+    ; first section when a file starts with a UTF-8 BOM — which is what
+    ; Notepad writes by default — so translators' files would lose [meta].
+    ; FileRead detects BOMs correctly; we parse sections ourselves.
+    static LoadIniFile(path) {
+        sections := Map()
+        try
+            text := FileRead(path)
+        catch
+            return sections
+        if (SubStr(text, 1, 1) = Chr(0xFEFF))
+            text := SubStr(text, 2)
+        current := ""
+        Loop Parse, text, "`n", "`r" {
+            line := Trim(A_LoopField)
+            if (line = "" || SubStr(line, 1, 1) = ";" || SubStr(line, 1, 1) = "#")
+                continue
+            if (RegExMatch(line, "^\[(.+)\]$", &m)) {
+                current := StrLower(Trim(m[1]))
+                if !sections.Has(current)
+                    sections[current] := Map()
+                continue
+            }
+            if (current = "")
+                continue
+            pos := InStr(line, "=")
+            if (pos < 2)
+                continue
+            key := StrLower(Trim(SubStr(line, 1, pos - 1)))
+            sections[current][key] := Trim(SubStr(line, pos + 1))
+        }
+        return sections
+    }
+
+    static LoadLanguages() {
+        this.dict := Map()
+        this.langNames := Map()
+        this.langIds := Map()
+        for code in this.DiscoverCodes() {
+            ini := this.LoadIniFile(this.langDir "\" code ".ini")
+            meta := ini.Has("meta") ? ini["meta"] : Map()
+            if (meta.Has("language_name") && Trim(meta["language_name"]) != "")
+                this.langNames[code] := Trim(meta["language_name"])
+            else
+                this.langNames[code] := code
+            id := 0
+            try id := Integer(meta.Has("lang_id") ? meta["lang_id"] : "0")
+            catch
+                id := 0
+            this.langIds[code] := id
+            this.dict[code] := ini.Has("strings") ? ini["strings"] : Map()
+        }
+        if !this.dict.Has("en") {
+            this.dict["en"] := Map()
+            this.langNames["en"] := "English"
+            this.langIds["en"] := 9
+        }
+    }
+
+    ; Codes with English first, for the tray language menu.
+    static LanguageCodes() {
+        codes := ["en"]
+        for code in this.dict {
+            if (code != "en")
+                codes.Push(code)
+        }
+        return codes
+    }
+
+    static DisplayName(code) {
+        return this.langNames.Has(code) ? this.langNames[code] : code
+    }
+
     static ResolveActiveLanguage() {
-        if (this.langPreference = "it") {
-            this.activeLang := "it"
-        } else if (this.langPreference = "en") {
-            this.activeLang := "en"
-        } else {
-            ; Auto-detect OS UI language (0x10 = LANG_ITALIAN, 0x0410 = it-IT)
-            langId := DllCall("Kernel32.dll\GetUserDefaultUILanguage", "UShort")
-            primaryLang := langId & 0x3FF
-            this.activeLang := (primaryLang = 0x10 || A_Language = "0410") ? "it" : "en"
+        pref := StrLower(Trim(String(this.langPreference)))
+        if (pref != "" && pref != "auto") {
+            if this.dict.Has(pref) {
+                this.activeLang := pref
+                return
+            }
+            Logger.Log("Unknown language '" pref "' in scanner.conf; falling back to auto-detect.")
+        }
+        ; Auto: match the OS UI language against each file's lang_id.
+        langId := DllCall("Kernel32.dll\GetUserDefaultUILanguage", "UShort")
+        primary := langId & 0x3FF
+        this.activeLang := "en"
+        for code, id in this.langIds {
+            if (id != 0 && id = primary) {
+                this.activeLang := code
+                break
+            }
         }
     }
 
     static SetLanguage(newLang) {
+        newLang := StrLower(Trim(String(newLang)))
+        if (newLang != "auto" && !this.dict.Has(newLang))
+            newLang := "auto"
         this.langPreference := newLang
         AppConfig.language := newLang
         AppConfig.Save("UI", "language", newLang)
@@ -32,7 +152,7 @@ class I18n {
 
         ; Rebuild Tray menu with updated strings
         TrayManager.Init()
-        TrayTip(this.Get("lang_switched"), "ISBN Bridge")
+        TrayTip(this.Get("lang_switched", this.DisplayName(this.activeLang)), "ISBN Bridge")
     }
 
     static Get(key, params*) {
@@ -46,131 +166,11 @@ class I18n {
             text := this.dict[this.activeLang][key]
         }
 
+        ; INI files store newlines as literal `n; expand them here.
+        text := StrReplace(text, "``n", "`n")
         for i, val in params {
             text := StrReplace(text, "{" i "}", String(val))
         }
         return text
-    }
-
-    static SetupDictionary() {
-        this.dict["it"] := Map(
-            "app_title", "ISBN Bridge",
-            "lang_switched", "Lingua impostata su: Italiano",
-            "client_active_tip", "Client ISBN Bridge attivo (Porta: {1})",
-            "tray_icon_tip", "ISBN Bridge",
-            "tray_firstrun_hint", "Benvenuto! Fai clic sull'icona nella tray per mostrare il QR di abbinamento.",
-            "listener_error_title", "ISBN Bridge - Errore",
-            "listener_error_msg", "Impossibile avviare il listener AutoHotkey sulla porta {1}.`n`nLa porta potrebbe essere già in uso.",
-            "qr_hint", "Inquadra per abbinare • Clic o ESC per chiudere",
-            "qr_download_error", "Impossibile scaricare il QR code dal server Go.",
-            "isbn_ready_tooltip", "ISBN pronto: {1}`nClicca nel campo di testo per incollarlo.`nESC per annullare.",
-            "isbn_ready_tray", "ISBN pronto: {1}",
-            "isbn_pasted_tooltip", "ISBN incollato: {1}",
-            "tray_active", "Attivo",
-            "tray_active_tip_on", "Auto-incolla attivo.",
-            "tray_active_tip_off", "Auto-incolla disattivato.",
-            "tray_expiry", "Scadenza token",
-            "tray_settings", "Impostazioni",
-            "tray_expiry_min", "{1} minuti",
-            "tray_expiry_hour", "{1} ora ({2} min)",
-            "tray_expiry_hours", "{1} ore ({2} min)",
-            "tray_expiry_set_tip", "Scadenza token impostata a {1} minuti.`nNuovo QR generato!",
-            "tray_expiry_saved_tip", "Scadenza salvata nel file di configurazione.",
-            "tray_overwrite", "Sovrascrivi testo (Ctrl+A)",
-            "tray_overwrite_tip_on", "Sovrascrittura testo attiva.",
-            "tray_overwrite_tip_off", "Sovrascrittura testo disattivata.",
-            "tray_auto_hover", "Auto-incolla al passaggio (senza clic)",
-            "tray_auto_hover_tip_on", "Auto-incolla al passaggio attivo.",
-            "tray_auto_hover_tip_off", "Auto-incolla al passaggio disattivato.",
-            "tray_sound", "Suono feedback",
-            "tray_sound_enable", "Abilita suono",
-            "tray_sound_tip_on", "Suono feedback attivo.",
-            "tray_sound_tip_off", "Suono feedback disattivato.",
-            "sound_tap", "Tap (Morbido / Attuale)",
-            "sound_ios", "iOS Tock (Clic felpato)",
-            "sound_bubble", "Bubble Pop (Goccia / Pop morbido)",
-            "sound_chime", "Gentle Chime (Accordo marimba)",
-            "sound_beep", "Modern Beep (Scanner discreto)",
-            "sound_click", "Mechanical Click (Switch tastiera)",
-            "sound_nav", "Windows Navigation (Tick classico)",
-            "tray_auto_qr", "Mostra QR code al cambio token",
-            "tray_show_qr", "Mostra QR code al centro",
-            "tray_show_server_console", "Mostra console server",
-            "tray_hide_server_console", "Nascondi console server",
-            "server_console_shown", "Console del server visualizzata.",
-            "server_console_hidden", "Console del server nascosta.",
-            "server_not_running", "Il server Go (isbn-bridge-server.exe) non è in esecuzione.",
-            "tray_reset_token", "Reset token (Nuovo QR)",
-            "tray_reset_token_success", "Token reimpostato con successo!`nNuovo QR generato.",
-            "tray_reset_token_error", "Errore di contatto col server Go su {1}",
-            "tray_open_conf", "Apri scanner.conf",
-            "tray_clear_isbn", "Svuota ISBN in sospeso",
-            "tray_open_log", "Apri log debug",
-            "tray_language", "Lingua / Language",
-            "lang_auto", "Automatico (Rileva sistema)",
-            "lang_it", "Italiano",
-            "lang_en", "English",
-            "tray_exit", "Esci"
-        )
-
-        this.dict["en"] := Map(
-            "app_title", "ISBN Bridge",
-            "lang_switched", "Language set to: English",
-            "client_active_tip", "ISBN Bridge client active (Port: {1})",
-            "tray_icon_tip", "ISBN Bridge",
-            "tray_firstrun_hint", "Welcome! Left-click the tray icon anytime to show the pairing QR code.",
-            "listener_error_title", "ISBN Bridge - Error",
-            "listener_error_msg", "Unable to start AutoHotkey listener on port {1}.`n`nThe port may already be in use.",
-            "qr_hint", "Scan to pair • Click or ESC to close",
-            "qr_download_error", "Unable to download QR code from Go server.",
-            "isbn_ready_tooltip", "ISBN ready: {1}`nClick in text field to paste.`nESC to cancel.",
-            "isbn_ready_tray", "ISBN ready: {1}",
-            "isbn_pasted_tooltip", "ISBN pasted: {1}",
-            "tray_active", "Active",
-            "tray_active_tip_on", "Auto-paste enabled.",
-            "tray_active_tip_off", "Auto-paste disabled.",
-            "tray_expiry", "Token Expiry",
-            "tray_settings", "Settings",
-            "tray_expiry_min", "{1} minutes",
-            "tray_expiry_hour", "{1} hour ({2} min)",
-            "tray_expiry_hours", "{1} hours ({2} min)",
-            "tray_expiry_set_tip", "Token expiry set to {1} minutes.`nNew QR generated!",
-            "tray_expiry_saved_tip", "Expiry saved to configuration file.",
-            "tray_overwrite", "Overwrite text (Ctrl+A)",
-            "tray_overwrite_tip_on", "Text overwrite enabled.",
-            "tray_overwrite_tip_off", "Text overwrite disabled.",
-            "tray_auto_hover", "Auto-paste on hover (no click)",
-            "tray_auto_hover_tip_on", "Hover auto-paste enabled.",
-            "tray_auto_hover_tip_off", "Hover auto-paste disabled.",
-            "tray_sound", "Audio Feedback",
-            "tray_sound_enable", "Enable sound",
-            "tray_sound_tip_on", "Audio feedback enabled.",
-            "tray_sound_tip_off", "Audio feedback disabled.",
-            "sound_tap", "Tap (Soft / Default)",
-            "sound_ios", "iOS Tock (Haptic tick)",
-            "sound_bubble", "Bubble Pop (Soft drop)",
-            "sound_chime", "Gentle Chime (Marimba tone)",
-            "sound_beep", "Modern Beep (Subtle laser)",
-            "sound_click", "Mechanical Click (Key switch)",
-            "sound_nav", "Windows Navigation (System tick)",
-            "tray_auto_qr", "Show QR code on token refresh",
-            "tray_show_qr", "Show centered QR code",
-            "tray_show_server_console", "Show server console",
-            "tray_hide_server_console", "Hide server console",
-            "server_console_shown", "Server console is now visible.",
-            "server_console_hidden", "Server console hidden.",
-            "server_not_running", "Go server (isbn-bridge-server.exe) is not running.",
-            "tray_reset_token", "Reset token (New QR)",
-            "tray_reset_token_success", "Token reset successfully!`nNew QR generated.",
-            "tray_reset_token_error", "Error contacting Go server at {1}",
-            "tray_open_conf", "Open scanner.conf",
-            "tray_clear_isbn", "Clear pending ISBN",
-            "tray_open_log", "Open debug log",
-            "tray_language", "Language / Lingua",
-            "lang_auto", "Auto (System default)",
-            "lang_it", "Italiano (Italian)",
-            "lang_en", "English",
-            "tray_exit", "Exit"
-        )
     }
 }

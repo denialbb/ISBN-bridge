@@ -43,6 +43,7 @@ type Server struct {
 	appConfig        *config.Config
 	port             int
 	mux              *http.ServeMux
+	langs            *pageLangs
 	replay           *replayCache
 	limiter          *rateLimiter
 	consoleShow      func()
@@ -65,6 +66,7 @@ func NewServer(cfg Config) *Server {
 		appConfig:        cfg.AppConfig,
 		port:             cfg.Port,
 		mux:              http.NewServeMux(),
+		langs:            loadPageLangs(),
 		replay:           newReplayCache(replaySize(cfg.AppConfig), replayTTL(cfg.AppConfig)),
 		limiter:          newRateLimiter(rateLimitMax(cfg.AppConfig), rateLimitWindow(cfg.AppConfig)),
 		consoleShow:      cfg.ConsoleShow,
@@ -284,27 +286,31 @@ func (s *Server) handleGetQRHTML(w http.ResponseWriter, r *http.Request) {
 	token, _ := s.tokenMgr.GetToken()
 	lang := s.detectLanguage(r)
 
-	subtitle := "Inquadra con la fotocamera per abbinare"
-	tokenNote := "Token attivo: " + token[:8] + "..."
-	if lang == "en" {
-		subtitle = "Scan with phone camera to pair"
-		tokenNote = "Active token: " + token[:8] + "..."
+	prefix := token
+	if len(token) > 8 {
+		prefix = token[:8]
 	}
+	subtitle := s.langs.get(lang, "qr_subtitle")
+	tokenNote := strings.ReplaceAll(s.langs.get(lang, "qr_token_note"), "{prefix}", prefix)
+	qrTitle := s.langs.get(lang, "qr_title")
 
-	itClass := "lang-btn"
-	enClass := "lang-btn"
-	if lang == "it" {
-		itClass += " active"
-	} else {
-		enClass += " active"
+	var bar strings.Builder
+	bar.WriteString(`<div class="lang-bar">`)
+	for _, code := range s.langs.codes() {
+		cls := "lang-btn"
+		if code == lang {
+			cls += " active"
+		}
+		fmt.Fprintf(&bar, `<a href="?lang=%s" class="%s">%s</a>`, code, cls, s.langs.name(code))
 	}
+	bar.WriteString(`</div>`)
 
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="%s">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ISBN Bridge - Pairing</title>
+  <title>%s</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #0f172a; color: #f8fafc; }
     .card { background: #1e293b; max-width: 360px; width: 90%%; padding: 24px 20px; border-radius: 20px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3); border: 1px solid #334155; position: relative; }
@@ -318,17 +324,14 @@ func (s *Server) handleGetQRHTML(w http.ResponseWriter, r *http.Request) {
 </head>
 <body>
   <div class="card">
-    <div class="lang-bar">
-      <a href="?lang=it" class="%s">🇮🇹 IT</a>
-      <a href="?lang=en" class="%s">🇬🇧 EN</a>
-    </div>
+    %s
     <h2>ISBN Bridge</h2>
     <p>%s</p>
     <img src="data:image/png;base64,%s" alt="QR Code" />
     <p style="font-size: 0.75rem; color: #64748b;">%s</p>
   </div>
 </body>
-</html>`, lang, itClass, enClass, subtitle, b64, tokenNote)
+</html>`, lang, qrTitle, bar.String(), subtitle, b64, tokenNote)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -468,17 +471,30 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) detectLanguage(r *http.Request) string {
-	if q := strings.ToLower(r.URL.Query().Get("lang")); q == "it" || q == "en" {
+	if s.langs == nil {
+		s.langs = loadPageLangs()
+	}
+	// Explicit ?lang= wins, then scanner.conf, then browser preference.
+	if q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("lang"))); s.langs.has(q) {
 		return q
 	}
 	if s.appConfig != nil {
-		if l := strings.ToLower(s.appConfig.Language); l == "it" || l == "en" {
+		if l := strings.ToLower(strings.TrimSpace(s.appConfig.Language)); s.langs.has(l) {
 			return l
 		}
 	}
 	accept := strings.ToLower(r.Header.Get("Accept-Language"))
-	if strings.Contains(accept, "it") {
-		return "it"
+	for _, part := range strings.Split(accept, ",") {
+		part = strings.TrimSpace(part)
+		if i := strings.Index(part, ";"); i >= 0 {
+			part = strings.TrimSpace(part[:i])
+		}
+		if i := strings.Index(part, "-"); i >= 0 {
+			part = part[:i]
+		}
+		if part != "" && s.langs.has(part) {
+			return part
+		}
 	}
 	return "en"
 }
@@ -530,7 +546,7 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lang := s.detectLanguage(r)
-	isIT := lang == "it"
+	T := func(key string) string { return s.langs.get(lang, key) }
 
 	ua := r.UserAgent()
 	isIOS := strings.Contains(ua, "iPhone") || strings.Contains(ua, "iPad") || strings.Contains(ua, "iPod")
@@ -540,39 +556,29 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 	primaryShortcutURI := fmt.Sprintf("shortcuts://run-shortcut?name=Pair%%20ISBN%%20Bridge&input=text&text=%s", escapedJSON)
 	altShortcutURI := fmt.Sprintf("shortcuts://run-shortcut?name=ISBN%%20Bridge%%20Pair&input=text&text=%s", escapedJSON)
 
-	badgeHTML := `<div class="badge"><span class="dot"></span> Server Connected</div>`
-	if isIT {
-		badgeHTML = `<div class="badge"><span class="dot"></span> Server Connesso</div>`
-	}
+	badgeHTML := `<div class="badge"><span class="dot"></span> ` + T("pair_badge_connected") + `</div>`
 	if tokenMismatch {
-		if isIT {
-			badgeHTML = `<div class="badge warn"><span class="dot"></span> Token Aggiornato</div>`
-		} else {
-			badgeHTML = `<div class="badge warn"><span class="dot"></span> Token Refreshed (Updated)</div>`
+		badgeHTML = `<div class="badge warn"><span class="dot"></span> ` + T("pair_badge_refreshed") + `</div>`
+	}
+
+	title := T("pair_title")
+	desc := T("pair_desc")
+	serverLabel := T("pair_server_label")
+	ttlLabel := T("pair_ttl_label")
+	toastMsg := T("pair_toast")
+
+	var bar strings.Builder
+	bar.WriteString(`<div class="lang-bar">`)
+	for _, code := range s.langs.codes() {
+		cls := "lang-btn"
+		if code == lang {
+			cls += " active"
 		}
+		fmt.Fprintf(&bar, `<a href="?lang=%s&token=%s" class="%s">%s</a>`,
+			code, url.QueryEscape(tokenParam), cls, s.langs.name(code))
 	}
-
-	title := "ISBN Bridge Pairing"
-	desc := "Connecting your mobile barcode scanner to your PC desktop session."
-	serverLabel := "Server Host:"
-	ttlLabel := "Token TTL:"
-	toastMsg := "✅ Config copied to clipboard!"
-	if isIT {
-		title = "Abbinamento ISBN Bridge"
-		desc = "Collega lo scanner del tuo telefono al computer."
-		serverLabel = "Indirizzo Server:"
-		ttlLabel = "Validità Token:"
-		toastMsg = "✅ Configurazione copiata negli appunti!"
-	}
-
-	itClass := "lang-btn"
-	enClass := "lang-btn"
-	if isIT {
-		itClass += " active"
-	} else {
-		enClass += " active"
-	}
-	langBar := fmt.Sprintf(`<div class="lang-bar"><a href="?lang=it&token=%s" class="%s">🇮🇹 IT</a><a href="?lang=en&token=%s" class="%s">🇬🇧 EN</a></div>`, url.QueryEscape(tokenParam), itClass, url.QueryEscape(tokenParam), enClass)
+	bar.WriteString(`</div>`)
+	langBar := bar.String()
 
 	autoRedirectScript := ""
 	actionSection := ""
@@ -587,14 +593,9 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
     };
   </script>`, primaryShortcutURI)
 
-		iosPrimary := "⚡ Tap to Pair iPhone"
-		iosAlt := "Alternate: Run \"ISBN Bridge Pair\""
-		iosSub := "If Safari asks, tap <strong>Open in Shortcuts</strong> to finish pairing."
-		if isIT {
-			iosPrimary = "⚡ Tocca per abbinare iPhone"
-			iosAlt = "Alternativo: Avvia \"ISBN Bridge Pair\""
-			iosSub = "Se Safari lo richiede, tocca <strong>Apri in Comandi Rapidi</strong> per completare l'abbinamento."
-		}
+		iosPrimary := T("pair_ios_primary")
+		iosAlt := T("pair_ios_alt")
+		iosSub := T("pair_ios_sub")
 
 		actionSection = fmt.Sprintf(`
     <a href=%q class="btn btn-primary">%s</a>
@@ -602,14 +603,9 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
     <p class="subtext">%s</p>
 `, primaryShortcutURI, iosPrimary, altShortcutURI, iosAlt, iosSub)
 	} else if isAndroid {
-		andCopy := "📋 Copy Config JSON"
-		andDownload := "💾 Download Config File"
-		andSub := "Use in Tasker, HTTP Shortcuts, or your scanner automation app."
-		if isIT {
-			andCopy = "📋 Copia JSON Configurazione"
-			andDownload = "💾 Scarica File di Configurazione"
-			andSub = "Da usare in Tasker, HTTP Shortcuts o app di scansione."
-		}
+		andCopy := T("pair_and_copy")
+		andDownload := T("pair_and_download")
+		andSub := T("pair_and_sub")
 
 		actionSection = fmt.Sprintf(`
     <button class="btn btn-primary" onclick="copyConfig()">%s</button>
@@ -617,12 +613,8 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
     <p class="subtext">%s</p>
 `, andCopy, url.PathEscape(configJSON), andDownload, andSub)
 	} else {
-		launchText := "⚡ Launch iOS Shortcut"
-		copyText := "📋 Copy Config JSON"
-		if isIT {
-			launchText = "⚡ Avvia Comando Rapido iOS"
-			copyText = "📋 Copia JSON Configurazione"
-		}
+		launchText := T("pair_launch")
+		copyText := T("pair_copy")
 		actionSection = fmt.Sprintf(`
     <a href=%q class="btn btn-primary">%s</a>
     <button class="btn btn-secondary" onclick="copyConfig()">%s</button>

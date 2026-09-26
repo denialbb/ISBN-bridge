@@ -1,0 +1,21 @@
+{
+  "name": "Italiano",
+  "qr_title": "ISBN Bridge - Abbinamento",
+  "qr_subtitle": "Inquadra con la fotocamera per abbinare",
+  "qr_token_note": "Token attivo: {prefix}...",
+  "pair_badge_connected": "Server Connesso",
+  "pair_badge_refreshed": "Token Aggiornato",
+  "pair_title": "Abbinamento ISBN Bridge",
+  "pair_desc": "Collega lo scanner del tuo telefono al computer.",
+  "pair_server_label": "Indirizzo Server:",
+  "pair_ttl_label": "Validità Token:",
+  "pair_toast": "✅ Configurazione copiata negli appunti!",
+  "pair_ios_primary": "⚡ Tocca per abbinare iPhone",
+  "pair_ios_alt": "Alternativo: Avvia \"ISBN Bridge Pair\"",
+  "pair_ios_sub": "Se Safari lo richiede, tocca <strong>Apri in Comandi Rapidi</strong> per completare l'abbinamento.",
+  "pair_and_copy": "📋 Copia JSON Configurazione",
+  "pair_and_download": "💾 Scarica File di Configurazione",
+  "pair_and_sub": "Da usare in Tasker, HTTP Shortcuts o app di scansione.",
+  "pair_launch": "⚡ Avvia Comando Rapido iOS",
+  "pair_copy": "📋 Copia JSON Configurazione"
+}

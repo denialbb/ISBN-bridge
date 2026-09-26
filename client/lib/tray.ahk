@@ -79,12 +79,14 @@ class TrayManager {
 
         this.settingsMenu.Add(I18n.Get("tray_auto_qr"), (*) => this.ToggleAutoQR())
 
-        ; Language submenu
+        ; Language submenu, built from lang/*.ini so adding a
+        ; language needs no code change. Callbacks look the code up
+        ; by display name (avoids closing over the loop variable).
         this.languageMenu := Menu()
-        this.languageMenu.Add(I18n.Get("lang_auto"), (*) => I18n.SetLanguage("auto"))
+        this.languageMenu.Add(I18n.Get("lang_auto"), this.OnLanguageSelect)
         this.languageMenu.Add()
-        this.languageMenu.Add(I18n.Get("lang_it"), (*) => I18n.SetLanguage("it"))
-        this.languageMenu.Add(I18n.Get("lang_en"), (*) => I18n.SetLanguage("en"))
+        for code in I18n.LanguageCodes()
+            this.languageMenu.Add(I18n.DisplayName(code), this.OnLanguageSelect)
         this.settingsMenu.Add(I18n.Get("tray_language"), this.languageMenu)
 
         A_TrayMenu.Add(I18n.Get("tray_settings"), this.settingsMenu)
@@ -152,6 +154,19 @@ class TrayManager {
         AppConfig.qrAutoShowOnRefresh := !AppConfig.qrAutoShowOnRefresh
         AppConfig.Save("QRCode", "auto_show_on_refresh", AppConfig.qrAutoShowOnRefresh ? "true" : "false")
         this.UpdateState()
+    }
+
+    static OnLanguageSelect(itemName, *) {
+        if (itemName = I18n.Get("lang_auto")) {
+            I18n.SetLanguage("auto")
+            return
+        }
+        for code in I18n.LanguageCodes() {
+            if (itemName = I18n.DisplayName(code)) {
+                I18n.SetLanguage(code)
+                return
+            }
+        }
     }
 
     static SetExpiry(minutes) {
@@ -238,15 +253,13 @@ class TrayManager {
 
         ; Language checkmarks
         this.languageMenu.Uncheck(I18n.Get("lang_auto"))
-        this.languageMenu.Uncheck(I18n.Get("lang_it"))
-        this.languageMenu.Uncheck(I18n.Get("lang_en"))
+        for code in I18n.LanguageCodes()
+            this.languageMenu.Uncheck(I18n.DisplayName(code))
 
         if (I18n.langPreference = "auto")
             this.languageMenu.Check(I18n.Get("lang_auto"))
-        else if (I18n.langPreference = "it")
-            this.languageMenu.Check(I18n.Get("lang_it"))
-        else if (I18n.langPreference = "en")
-            this.languageMenu.Check(I18n.Get("lang_en"))
+        else
+            this.languageMenu.Check(I18n.DisplayName(I18n.activeLang))
 
         this.settingsMenu.Uncheck(I18n.Get("tray_auto_qr"))
         if AppConfig.qrAutoShowOnRefresh
