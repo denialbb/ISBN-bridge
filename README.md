@@ -124,4 +124,4 @@ go build -o bin/isbn-bridge-server.exe ./cmd/server
 ## Credits
 
 - Tray icon: [Barcode Scan icon by UXWing](https://uxwing.com/barcode-scan-icon/) (free for commercial use, whitened for tray legibility).
-- Popup font: [Fira Code by Tonsky](https://github.com/tonsky/FiraCode) (SIL Open Font License 1.1, bundled in `client/assets/fonts/`).
+- Popup brand artwork rendered with [Skyhook Mono by FontomType](https://www.fontsquirrel.com/fonts/skyhook-mono) (desktop license; font file not distributed).

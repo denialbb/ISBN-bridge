@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -221,5 +223,43 @@ func TestPairingPayload(t *testing.T) {
 	png, err := mgr.GenerateQRCodePNG()
 	if err != nil || len(png) == 0 {
 		t.Errorf("failed to generate pairing QR PNG: %v", err)
+	}
+}
+
+func TestQRRecolorBrandInk(t *testing.T) {
+	mgr := NewTokenManager(filepath.Join(t.TempDir(), "token.txt"), time.Hour)
+	mgr.SetBaseURL("http://192.168.1.107:8765")
+	out, err := mgr.GenerateQRCodePNG()
+	if err != nil {
+		t.Fatalf("failed to generate QR: %v", err)
+	}
+
+	img, err := png.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatalf("generated QR is not a valid PNG: %v", err)
+	}
+	bounds := img.Bounds()
+	var navy, black, white int
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			switch {
+			case r>>8 == 0x2F && g>>8 == 0x4A && b>>8 == 0x6E:
+				navy++
+			case r < 0x8000 && g < 0x8000 && b < 0x8000:
+				black++
+			default:
+				white++
+			}
+		}
+	}
+	if navy == 0 {
+		t.Error("expected brand-ink modules in recolored QR, found none")
+	}
+	if black != 0 {
+		t.Errorf("expected no pure-black modules after recolor, found %d", black)
+	}
+	if white == 0 {
+		t.Error("expected white background to survive recoloring")
 	}
 }

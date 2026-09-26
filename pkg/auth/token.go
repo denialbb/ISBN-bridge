@@ -1,8 +1,12 @@
 package auth
 
 import (
+	"bytes"
 	"crypto/rand"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"os"
 	"path/filepath"
@@ -145,6 +149,10 @@ func (m *TokenManager) CurrentToken() string {
 	return m.token
 }
 
+// qrModuleInk is the brand ink used for QR modules. Dark navy keeps
+// scanner contrast high on the white background and quiet zone.
+var qrModuleInk = color.RGBA{R: 0x2F, G: 0x4A, B: 0x6E, A: 0xFF}
+
 // GenerateQRCodePNG creates a PNG image of the current pairing QR code.
 // The QR border is disabled so the popup card hugs the code; the card's
 // own white margin doubles as the scanner quiet zone.
@@ -158,7 +166,40 @@ func (m *TokenManager) GenerateQRCodePNG() ([]byte, error) {
 		return nil, err
 	}
 	q.DisableBorder = true
-	return q.PNG(256)
+	raw, err := q.PNG(256)
+	if err != nil {
+		return nil, err
+	}
+	return recolorQRPNG(raw, qrModuleInk)
+}
+
+// recolorQRPNG repaints dark QR modules with ink while leaving the white
+// background and quiet zone untouched.
+func recolorQRPNG(raw []byte, ink color.RGBA) ([]byte, error) {
+	img, err := png.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	bounds := img.Bounds()
+	out := image.NewRGBA(bounds)
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			// r/g/b are 16-bit; luminance threshold at ~50% separates
+			// near-black modules from the white background.
+			lum := 0.299*float64(r) + 0.587*float64(g) + 0.114*float64(b)
+			if lum < 0.5*0xFFFF {
+				out.SetRGBA(x, y, ink)
+			} else {
+				out.SetRGBA(x, y, color.RGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF})
+			}
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, out); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // PrintTerminalQR prints an ANSI QR code of the current pairing payload to the given writer.

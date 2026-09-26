@@ -28,17 +28,20 @@ class QRModal {
 
         size := AppConfig.qrPopupSize
 
-        ; Brand line on top: bundled Fira Code, faded slate
-        this.guiInstance.SetFont("s12 bold c7d8ca3", "Fira Code")
-        brandCtrl := this.guiInstance.Add("Text", "Center w" size, "ISBN Bridge")
-        brandCtrl.OnEvent("Click", (*) => this.Hide())
+        ; Brand artwork on top (pre-rendered Skyhook Mono, desktop license)
+        brandPath := A_ScriptDir "\assets\brand.png"
+        if FileExist(brandPath) {
+            ; Artwork is 2x width for hidpi crispness, displayed at QR width
+            brandCtrl := this.guiInstance.Add("Picture", "w" size " h" (size * 96 // 560) " Center", brandPath)
+            brandCtrl.OnEvent("Click", (*) => this.Hide())
+        }
 
         ; Crisp QR Code
         imgCtrl := this.guiInstance.Add("Picture", "w" size " h" size " Center y+6", tempQR)
         imgCtrl.OnEvent("Click", (*) => this.Hide())
 
-        ; Minimal single-line hint in Tahoma
-        this.guiInstance.SetFont("s8 norm c64748b", "Tahoma")
+        ; Minimal single-line hint, matched to brand ink
+        this.guiInstance.SetFont("s8 norm c2F4A6E", "Tahoma")
         hintCtrl := this.guiInstance.Add("Text", "Center w" size " y+8", I18n.Get("qr_hint"))
         hintCtrl.OnEvent("Click", (*) => this.Hide())
 
