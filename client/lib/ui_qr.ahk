@@ -24,20 +24,20 @@ class QRModal {
         this.guiInstance := Gui("+AlwaysOnTop -Caption +Border +ToolWindow", I18n.Get("app_title"))
         this.guiInstance.BackColor := "0xFFFFFF"
         this.guiInstance.MarginX := 16
-        this.guiInstance.MarginY := 8
+        this.guiInstance.MarginY := 6
 
         size := AppConfig.qrPopupSize
 
-        ; Brand artwork on top (pre-rendered Skyhook Mono, desktop license)
+        ; Brand artwork, padded sides: all gaps controlled here
         brandPath := A_ScriptDir "\assets\brand.png"
         if FileExist(brandPath) {
-            ; Artwork is 2x width for hidpi crispness, displayed at QR width
-            brandCtrl := this.guiInstance.Add("Picture", "w" size " h" (size * 96 // 560) " Center", brandPath)
+            ; Artwork is 516x55, displayed at QR width
+            brandCtrl := this.guiInstance.Add("Picture", "w" size " h" (size * 55 // 516) " Center y+2", brandPath)
             brandCtrl.OnEvent("Click", (*) => this.Hide())
         }
 
         ; Crisp QR Code
-        imgCtrl := this.guiInstance.Add("Picture", "w" size " h" size " Center y+6", tempQR)
+        imgCtrl := this.guiInstance.Add("Picture", "w" size " h" size " Center y+2", tempQR)
         imgCtrl.OnEvent("Click", (*) => this.Hide())
 
         ; Minimal single-line hint, matched to brand ink

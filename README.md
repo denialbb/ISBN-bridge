@@ -106,6 +106,8 @@ go build -o bin/isbn-bridge-server.exe ./cmd/server
 
 ### Pair & Scan
 
+![Pairing popup](docs/assets/popup.png)
+
 1. When the Go server starts, a QR code appears in the center of your screen.
 2. Point your phone's normal **Camera app** at the QR code and tap the link to pair automatically (no typing required!).
 3. Launch your **Scanner Shortcut** and point your camera at any book barcode!
