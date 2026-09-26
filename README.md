@@ -72,9 +72,9 @@ Scanning on iPhone is handled natively via two lightweight Apple Shortcuts:
 - ISBN Bridge: https://www.icloud.com/shortcuts/46434ad59d2b4bff92f8a2460bee9207
 - Pair ISBN Bridge: https://www.icloud.com/shortcuts/2cc219d6251f46d69ce5d6d3f4ce8cc8
 
-### Android (Planned)
+### Android (HTTP Shortcuts)
 
-Support for Android devices is planned using the same cryptographic protocol. Future updates will provide scripts/configs compatible with open-source automation apps (such as _HTTP Shortcuts_ or _Tasker_) and a dedicated lightweight web scanner.
+Android is supported via [HTTP Shortcuts](https://f-droid.org/packages/ch.rmy.android.http_shortcuts/) (free, open-source) with [Binary Eye](https://f-droid.org/packages/de.markusfisch.android.binaryeye/) as the barcode scanner backend. Same protocol, no server changes.
 
 For full setup instructions, see [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 
@@ -84,7 +84,7 @@ For full setup instructions, see [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 
 ### Recommended: download the release
 
-1. Get `ISBN-Bridge-v1.0.0-windows-x64.zip` from the
+1. Get `ISBN-Bridge-v1.0.2-windows-x64.zip` from the
    [Releases page](https://github.com/denialbb/ISBN-bridge/releases) and
    extract it anywhere (e.g. `Documents\ISBN-Bridge`).
 2. Double-click **`ISBN-Bridge.exe`** — it starts the server automatically
