@@ -218,6 +218,17 @@ func (s *Server) handlePostISBN(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
+// isMobileUserAgent reports whether ua looks like a phone/tablet browser
+// (used to detect a pairing-QR scan without touching the iOS Shortcuts).
+func isMobileUserAgent(ua string) bool {
+	for _, token := range []string{"iPhone", "iPad", "iPod", "Android", "Mobile"} {
+		if strings.Contains(ua, token) {
+			return true
+		}
+	}
+	return false
+}
+
 // clientIP returns the host portion of r.RemoteAddr without the port,
 // used as the rate-limit bucket key.
 func clientIP(r *http.Request) string {
@@ -477,6 +488,14 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Failed to retrieve token: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// A phone opening the pairing link means the QR was just scanned:
+	// dismiss the desktop popup. Desktop UAs leave it up.
+	if isMobileUserAgent(r.UserAgent()) && s.forwarder != nil {
+		go func() {
+			_ = s.forwarder.HideQR(context.Background())
+		}()
 	}
 
 	tokenParam := strings.TrimSpace(r.URL.Query().Get("token"))

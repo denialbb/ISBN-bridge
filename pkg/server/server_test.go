@@ -319,3 +319,46 @@ func TestPairEndpoint(t *testing.T) {
 		t.Errorf("expected Android page to offer config file download")
 	}
 }
+
+func TestPairHidesQRForMobile(t *testing.T) {
+	srv, _, forwarder := setupTestServer(t)
+
+	// iPhone UA (pairing-QR scan): QR popup must be dismissed.
+	reqMobile := httptest.NewRequest("GET", "/pair", nil)
+	reqMobile.Header.Set("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15")
+	recMobile := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recMobile, reqMobile)
+	if recMobile.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", recMobile.Code)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		forwarder.mu.Lock()
+		n := forwarder.hideQRCount
+		forwarder.mu.Unlock()
+		if n == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected HideQR after mobile /pair hit, got %d calls", n)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Desktop UA: popup stays up.
+	reqDesktop := httptest.NewRequest("GET", "/pair", nil)
+	reqDesktop.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	recDesktop := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recDesktop, reqDesktop)
+	if recDesktop.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", recDesktop.Code)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	forwarder.mu.Lock()
+	defer forwarder.mu.Unlock()
+	if forwarder.hideQRCount != 1 {
+		t.Errorf("expected no extra HideQR for desktop UA, got %d", forwarder.hideQRCount)
+	}
+}
