@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -148,7 +150,19 @@ func main() {
 
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+			log.Printf("Server error: %v", err)
+			// A second instance would otherwise exit instantly with a
+			// flashing window. Force the console visible, explain, and
+			// pause so the message can be read.
+			if isAddrInUse(err) {
+				showConsole()
+				fmt.Println()
+				fmt.Println("Another ISBN Bridge server is already running on this port.")
+				fmt.Println("Use the tray icon (ISBN-Bridge.exe) instead of starting a second server.")
+				fmt.Println("Press Enter to exit.")
+				fmt.Scanln()
+			}
+			os.Exit(1)
 		}
 	}()
 
@@ -173,6 +187,21 @@ func main() {
 		log.Printf("Server forced shutdown: %v", err)
 	}
 	log.Println("Server gracefully stopped.")
+}
+
+// isAddrInUse reports whether err is a TCP bind collision (a second
+// server instance). Matches WSAEADDRINUSE on Windows and EADDRINUSE on
+// Linux, with message fallbacks for wrapped errors.
+func isAddrInUse(err error) bool {
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		if errno == 10048 || errno == 98 {
+			return true
+		}
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "address already in use") ||
+		strings.Contains(msg, "Only one usage of each socket address")
 }
 
 func getOutboundIP() string {
