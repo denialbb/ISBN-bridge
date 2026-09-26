@@ -24,6 +24,13 @@ class TrayManager {
         A_TrayMenu.Delete()
         A_IconTip := I18n.Get("tray_icon_tip")
 
+        ; Custom tray icon (falls back to the AutoHotkey default if missing)
+        try {
+            iconPath := A_ScriptDir "\assets\tray.ico"
+            if FileExist(iconPath)
+                TraySetIcon(iconPath)
+        }
+
         A_TrayMenu.Add(I18n.Get("tray_active"), (*) => this.ToggleEnabled())
         A_TrayMenu.Add()
 
