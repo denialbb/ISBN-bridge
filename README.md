@@ -5,6 +5,7 @@
 ![AutoHotkey v2](https://img.shields.io/badge/AutoHotkey-v2-334455?logo=autohotkey&logoColor=white)
 ![iOS Shortcuts](https://img.shields.io/badge/iOS-Shortcuts-black?logo=apple&logoColor=white)
 ![SHA-256 auth](https://img.shields.io/badge/auth-SHA--256-success)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 **ISBN Bridge** connects mobile barcode scanning to your PC. Scan book barcodes with your phone and have them verified, authenticated, and pasted directly into your desktop browser or cataloging tools in real-time.
 
