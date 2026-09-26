@@ -124,6 +124,94 @@ func TestPostISBN_InvalidSignature(t *testing.T) {
 	}
 }
 
+func TestPostISBN_MissingTimestamp(t *testing.T) {
+	srv, tokenMgr, forwarder := setupTestServer(t)
+
+	token, _ := tokenMgr.GetToken()
+	rawISBN := "9780306406157"
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+
+	sum := sha256.Sum256([]byte(rawISBN + "|" + timestamp + "|" + token))
+	hashHex := hex.EncodeToString(sum[:])
+
+	req := httptest.NewRequest("POST", "/isbn", strings.NewReader(rawISBN))
+	req.Header.Set("Authorization", "Bearer "+hashHex)
+	// No Timestamp header: must be rejected, never silently accepted.
+
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 Unauthorized for missing timestamp, got %d", rec.Code)
+	}
+	if forwarder.forwardCount != 0 {
+		t.Errorf("expected no forwarding without timestamp, got %d", forwarder.forwardCount)
+	}
+}
+
+func TestPostISBN_ReplayRejected(t *testing.T) {
+	srv, tokenMgr, forwarder := setupTestServer(t)
+
+	token, _ := tokenMgr.GetToken()
+	rawISBN := "9780306406157"
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+
+	sum := sha256.Sum256([]byte(rawISBN + "|" + timestamp + "|" + token))
+	hashHex := hex.EncodeToString(sum[:])
+
+	send := func() int {
+		req := httptest.NewRequest("POST", "/isbn", strings.NewReader(rawISBN))
+		req.Header.Set("Authorization", "Bearer "+hashHex)
+		req.Header.Set("Timestamp", timestamp)
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	if code := send(); code != http.StatusOK {
+		t.Fatalf("expected first use 200 OK, got %d", code)
+	}
+	if code := send(); code != http.StatusConflict {
+		t.Errorf("expected replay 409 Conflict, got %d", code)
+	}
+
+	forwarder.mu.Lock()
+	defer forwarder.mu.Unlock()
+	if forwarder.forwardCount != 1 {
+		t.Errorf("expected exactly 1 forward (replay must not forward), got %d", forwarder.forwardCount)
+	}
+}
+
+func TestPostISBN_RateLimited(t *testing.T) {
+	srv, tokenMgr, _ := setupTestServer(t)
+
+	token, _ := tokenMgr.GetToken()
+	// Default budget without AppConfig: 2 requests per 10s per IP.
+	// Distinct timestamps yield distinct signatures so only the
+	// limiter (not the replay cache) can reject the third request.
+	var codes []int
+	for i := 0; i < 3; i++ {
+		rawISBN := "9780306406157"
+		timestamp := time.Now().Add(time.Duration(i) * time.Second).Format("2006-01-02 15:04:05")
+		sum := sha256.Sum256([]byte(rawISBN + "|" + timestamp + "|" + token))
+		hashHex := hex.EncodeToString(sum[:])
+
+		req := httptest.NewRequest("POST", "/isbn", strings.NewReader(rawISBN))
+		req.Header.Set("Authorization", "Bearer "+hashHex)
+		req.Header.Set("Timestamp", timestamp)
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, req)
+		codes = append(codes, rec.Code)
+	}
+
+	if codes[0] != http.StatusOK || codes[1] != http.StatusOK {
+		t.Errorf("expected first two requests 200 OK, got %v", codes)
+	}
+	if codes[2] != http.StatusTooManyRequests {
+		t.Errorf("expected third request 429 Too Many Requests, got %v", codes)
+	}
+}
+
 func TestPostISBN_InvalidISBN(t *testing.T) {
 	srv, tokenMgr, _ := setupTestServer(t)
 

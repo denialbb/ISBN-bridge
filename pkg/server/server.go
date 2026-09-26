@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -42,6 +43,8 @@ type Server struct {
 	appConfig        *config.Config
 	port             int
 	mux              *http.ServeMux
+	replay           *replayCache
+	limiter          *rateLimiter
 	consoleShow      func()
 	consoleHide      func()
 	consoleToggle    func() bool
@@ -62,6 +65,8 @@ func NewServer(cfg Config) *Server {
 		appConfig:        cfg.AppConfig,
 		port:             cfg.Port,
 		mux:              http.NewServeMux(),
+		replay:           newReplayCache(replaySize(cfg.AppConfig), replayTTL(cfg.AppConfig)),
+		limiter:          newRateLimiter(rateLimitMax(cfg.AppConfig), rateLimitWindow(cfg.AppConfig)),
 		consoleShow:      cfg.ConsoleShow,
 		consoleHide:      cfg.ConsoleHide,
 		consoleToggle:    cfg.ConsoleToggle,
@@ -71,6 +76,38 @@ func NewServer(cfg Config) *Server {
 
 	s.routes()
 	return s
+}
+
+// The LAN-hardening tunables below default to the report values when no
+// AppConfig is attached (e.g. in tests): 2 req/10s per IP, 100 signatures
+// remembered for 60s.
+
+func replaySize(cfg *config.Config) int {
+	if cfg == nil {
+		return 100
+	}
+	return cfg.ReplaySize
+}
+
+func replayTTL(cfg *config.Config) time.Duration {
+	if cfg == nil {
+		return 60 * time.Second
+	}
+	return cfg.ReplayTTL
+}
+
+func rateLimitMax(cfg *config.Config) int {
+	if cfg == nil {
+		return 2
+	}
+	return cfg.RateLimitMax
+}
+
+func rateLimitWindow(cfg *config.Config) time.Duration {
+	if cfg == nil {
+		return 10 * time.Second
+	}
+	return cfg.RateLimitWindow
 }
 
 // Handler returns the underlying http.Handler.
@@ -101,6 +138,13 @@ func (s *Server) routes() {
 }
 
 func (s *Server) handlePostISBN(w http.ResponseWriter, r *http.Request) {
+	// 0. Per-IP rate limit (LAN anti-spam) before any expensive work.
+	if s.limiter != nil && !s.limiter.allow(clientIP(r)) {
+		log.Printf("Rate limit exceeded (Client IP: %s)", r.RemoteAddr)
+		http.Error(w, "Too many requests, slow down", http.StatusTooManyRequests)
+		return
+	}
+
 	// Limit request body
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	bodyBytes, err := io.ReadAll(r.Body)
@@ -146,6 +190,15 @@ func (s *Server) handlePostISBN(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 3b. Single-use signatures: reject replays of an accepted request.
+	if s.replay != nil {
+		if s.replay.checkAndMark(normalizeSignature(authHeader), time.Now()) {
+			log.Printf("Replay rejected: signature already used (Client IP: %s)", r.RemoteAddr)
+			http.Error(w, "Conflict: signature already used", http.StatusConflict)
+			return
+		}
+	}
+
 	log.Printf("Authenticated valid ISBN: %s (Client: %s)", normalizedISBN, r.RemoteAddr)
 
 	// 4. Forward to AutoHotkey
@@ -163,6 +216,26 @@ func (s *Server) handlePostISBN(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
+}
+
+// clientIP returns the host portion of r.RemoteAddr without the port,
+// used as the rate-limit bucket key.
+func clientIP(r *http.Request) string {
+	host := r.RemoteAddr
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		return h
+	}
+	return host
+}
+
+// normalizeSignature canonicalizes an Authorization header value for
+// replay comparison (case-insensitive hex, optional Bearer prefix).
+func normalizeSignature(authHeader string) string {
+	trimmed := strings.TrimSpace(authHeader)
+	if len(trimmed) > 7 && strings.EqualFold(trimmed[:7], "bearer ") {
+		trimmed = strings.TrimSpace(trimmed[7:])
+	}
+	return strings.ToLower(trimmed)
 }
 
 func (s *Server) handleGetQRPNG(w http.ResponseWriter, r *http.Request) {
