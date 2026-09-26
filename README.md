@@ -118,3 +118,4 @@ For full setup instructions, see [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 ## Credits
 
 - Tray icon: [Barcode Scan icon by UXWing](https://uxwing.com/barcode-scan-icon/) (free for commercial use, whitened for tray legibility).
+- Popup font: [Fira Code by Tonsky](https://github.com/tonsky/FiraCode) (SIL Open Font License 1.1, bundled in `client/assets/fonts/`).

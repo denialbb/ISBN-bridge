@@ -24,12 +24,12 @@ class QRModal {
         this.guiInstance := Gui("+AlwaysOnTop -Caption +Border +ToolWindow", I18n.Get("app_title"))
         this.guiInstance.BackColor := "0xFFFFFF"
         this.guiInstance.MarginX := 16
-        this.guiInstance.MarginY := 16
+        this.guiInstance.MarginY := 8
 
         size := AppConfig.qrPopupSize
 
-        ; Brand line on top: serif, faded slate
-        this.guiInstance.SetFont("s12 bold c7d8ca3", "Georgia")
+        ; Brand line on top: bundled Fira Code, faded slate
+        this.guiInstance.SetFont("s12 bold c7d8ca3", "Fira Code")
         brandCtrl := this.guiInstance.Add("Text", "Center w" size, "ISBN Bridge")
         brandCtrl.OnEvent("Click", (*) => this.Hide())
 
@@ -37,8 +37,8 @@ class QRModal {
         imgCtrl := this.guiInstance.Add("Picture", "w" size " h" size " Center y+6", tempQR)
         imgCtrl.OnEvent("Click", (*) => this.Hide())
 
-        ; Minimal single-line hint
-        this.guiInstance.SetFont("s8 norm c64748b", "Verdana")
+        ; Minimal single-line hint in Tahoma
+        this.guiInstance.SetFont("s8 norm c64748b", "Tahoma")
         hintCtrl := this.guiInstance.Add("Text", "Center w" size " y+8", I18n.Get("qr_hint"))
         hintCtrl.OnEvent("Click", (*) => this.Hide())
 

@@ -8,6 +8,7 @@ CoordMode("Mouse", "Screen")
 #Include "lib/config.ahk"
 #Include "lib/i18n.ahk"
 #Include "lib/logger.ahk"
+#Include "lib/font.ahk"
 
 ; Catch and log any unhandled runtime exceptions
 OnError((err, mode) => (Logger.Log("UNHANDLED ERROR: " err.Message " at line " err.Line " in " err.File), 0))
@@ -23,9 +24,10 @@ OnError((err, mode) => (Logger.Log("UNHANDLED ERROR: " err.Message " at line " e
 ; Initialize configuration from scanner.conf
 AppConfig.Init()
 I18n.Init()
+FontLoader.Load()
 
 ; Register cleanup on shutdown
-OnExit((*) => (HttpListener.Shutdown(), ServerManager.Shutdown()))
+OnExit((*) => (FontLoader.Unload(), HttpListener.Shutdown(), ServerManager.Shutdown()))
 
 ; Start local HTTP listener
 if !HttpListener.Start(AppConfig.httpPort) {
