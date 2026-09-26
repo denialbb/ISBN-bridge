@@ -49,6 +49,11 @@ class PasteEngine {
         if (!wasIBeam && A_Cursor != "IBeam")
             return
 
+        ; Re-validate the target window: it may have changed during the
+        ; deferred-click delay, and we must never paste into the wrong app.
+        if !this.IsTargetWindowActive()
+            return
+
         this.PasteNow(isbn, false)
     }
 
@@ -61,6 +66,16 @@ class PasteEngine {
             if autoFocusWithClick {
                 Click()
                 Sleep(40)
+            }
+
+            ; Final guard right before keystrokes go out: the focused
+            ; window must be the target and the cursor must be an IBeam.
+            ; Checked after the focus click so hover-paste into a
+            ; background window still works, while a window switch in
+            ; the arming gap aborts instead of mistyping elsewhere.
+            if !this.IsTargetWindowActive() || A_Cursor != "IBeam" {
+                Logger.Log("PasteNow aborted: target window/cursor check failed for ISBN " isbn)
+                return
             }
 
             A_Clipboard := isbn
@@ -93,6 +108,21 @@ class PasteEngine {
 
         if (AppConfig.targetTabTitle = "")
             return true
+
+        return InStr(title, AppConfig.targetTabTitle, false) > 0
+    }
+
+    ; Active-window counterpart of the hover check: the currently focused
+    ; window must match the configured target tab title (empty filter
+    ; means any active window is acceptable).
+    static IsTargetWindowActive() {
+        if (AppConfig.targetTabTitle = "")
+            return true
+
+        title := ""
+        try title := WinGetTitle("A")
+        if (title = "")
+            return false
 
         return InStr(title, AppConfig.targetTabTitle, false) > 0
     }
