@@ -59,6 +59,28 @@ class ServerManager {
         return ProcessExist("isbn-bridge.exe") != 0
     }
 
+    ; Make sure the Go server answers. Starts it if needed and polls
+    ; /health briefly. Used before actions that require the server so a
+    ; dead server restarts transparently instead of erroring.
+    static EnsureRunning() {
+        if this.IsRunning()
+            return true
+        if !this.StartOrAttach()
+            return false
+        Loop 20 {
+            Sleep(200)
+            try {
+                req := ComObject("MSXML2.XMLHTTP")
+                req.open("GET", AppConfig.goServerUrl "/health", false)
+                req.send()
+                if (req.status = 200)
+                    return true
+            } catch {
+            }
+        }
+        return this.IsRunning()
+    }
+
     static GetWindow() {
         DetectHiddenWindows(true)
         if this.serverPid && (hwnd := WinExist("ahk_pid " this.serverPid))

@@ -26,11 +26,24 @@ class TrayManager {
         A_IconTip := I18n.Get("tray_icon_tip")
 
         ; Custom tray icon (falls back to the AutoHotkey default if missing)
+        iconPath := ""
         try {
-            iconPath := A_ScriptDir "\assets\tray.ico"
-            if FileExist(iconPath)
+            candidate := A_ScriptDir "\assets\tray.ico"
+            if FileExist(candidate) {
+                iconPath := candidate
                 TraySetIcon(iconPath)
+            }
         }
+
+        ; Static header: our icon + app name, non-clickable, then separator
+        headerLabel := "ISBN Bridge"
+        A_TrayMenu.Add(headerLabel, (*) => 0)
+        try {
+            if (iconPath != "")
+                A_TrayMenu.SetIcon(headerLabel, iconPath)
+        }
+        A_TrayMenu.Disable(headerLabel)
+        A_TrayMenu.Add()
 
         A_TrayMenu.Add(I18n.Get("tray_active"), (*) => this.ToggleEnabled())
         A_TrayMenu.Add()
@@ -146,6 +159,11 @@ class TrayManager {
         AppConfig.Save("Server", "token_ttl_minutes", minutes)
         this.UpdateState()
 
+        if !ServerManager.EnsureRunning() {
+            TrayTip(I18n.Get("tray_reset_token_error", AppConfig.goServerUrl), I18n.Get("app_title"), "Iconx")
+            return
+        }
+
         try {
             req := ComObject("MSXML2.XMLHTTP")
             req.open("POST", AppConfig.goServerUrl "/token/ttl?minutes=" minutes, false)
@@ -159,6 +177,11 @@ class TrayManager {
     }
 
     static ResetToken() {
+        if !ServerManager.EnsureRunning() {
+            TrayTip(I18n.Get("tray_reset_token_error", AppConfig.goServerUrl), I18n.Get("app_title"), "Iconx")
+            return
+        }
+
         try {
             req := ComObject("MSXML2.XMLHTTP")
             req.open("POST", AppConfig.goServerUrl "/token/refresh", false)

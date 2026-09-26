@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 echo "Starting server in background..."
-./bin/isbn-bridge -port 8765 -no-terminal-qr &
+./bin/isbn-bridge -port 8765 &
 PID=$!
 
 cleanup() {

@@ -22,7 +22,6 @@ func main() {
 	portFlag := flag.Int("port", 0, "Override HTTP port for incoming iOS Shortcut requests")
 	ahkPortFlag := flag.Int("ahk-port", 0, "Override AutoHotkey listener port")
 	tokenFile := flag.String("token-file", "token.txt", "Path to file for persisting active token")
-	noQR := flag.Bool("no-terminal-qr", false, "Disable printing ANSI QR code to terminal")
 	hideFlag := flag.Bool("hide-console", false, "Hide server console window on Windows")
 	flag.Parse()
 
@@ -102,14 +101,7 @@ func main() {
 	log.Printf("  -> ISBN Post URL:      %s/isbn", serverURL)
 	log.Printf("Forwarding to AutoHotkey at: %s", ahkTarget)
 	log.Println("--------------------------------------------------")
-
-	if !*noQR {
-		fmt.Println("\nScan this QR code with your phone camera to pair automatically:")
-		if err := tokenMgr.PrintTerminalQR(os.Stdout); err != nil {
-			log.Printf("Failed to render terminal QR code: %v", err)
-		}
-		fmt.Println()
-	}
+	log.Println("Pairing QR is shown as a desktop popup and at /qr in a browser.")
 
 	// Trigger seamless centered QR popup in AutoHotkey on startup
 	if appCfg.QRAutoShowOnRefresh {
@@ -139,10 +131,7 @@ func main() {
 				}
 				log.Println("--------------------------------------------------")
 				log.Printf("🔄 Token expired! New token generated: %s", newToken)
-				log.Println("Scan updated QR code below or open /qr in browser:")
-				if !*noQR {
-					_ = tokenMgr.PrintTerminalQR(os.Stdout)
-				}
+				log.Println("Open /qr in a browser for the updated pairing code:")
 				log.Println("--------------------------------------------------")
 
 				if appCfg.QRAutoShowOnRefresh {

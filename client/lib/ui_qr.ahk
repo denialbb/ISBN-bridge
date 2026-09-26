@@ -7,12 +7,15 @@ class QRModal {
     static Show(*) {
         Logger.Log("QRModal.Show invoked")
         tempQR := A_Temp "\isbn_bridge_qr.png"
-        try {
-            Download(AppConfig.goServerUrl "/qr.png", tempQR)
-        } catch as err {
-            Logger.Log("QRModal download failed: " err.Message)
-            TrayTip(I18n.Get("qr_download_error"), I18n.Get("app_title"), "Iconx")
-            return
+        if !this.TryDownload(tempQR) {
+            ; Server may be down: (re)start it, then retry once before
+            ; giving up with an error notification.
+            if ServerManager.EnsureRunning() && this.TryDownload(tempQR, 400)
+                Logger.Log("QRModal download succeeded after server restart")
+            else {
+                TrayTip(I18n.Get("qr_download_error"), I18n.Get("app_title"), "Iconx")
+                return
+            }
         }
 
         this.Hide()
@@ -43,6 +46,18 @@ class QRModal {
 
         if (AppConfig.qrAutoHideSeconds > 0)
             SetTimer(this.autoHideTimer, -AppConfig.qrAutoHideSeconds * 1000)
+    }
+
+    static TryDownload(tempQR, delay := 0) {
+        if delay
+            Sleep(delay)
+        try {
+            Download(AppConfig.goServerUrl "/qr.png", tempQR)
+            return true
+        } catch as err {
+            Logger.Log("QRModal download failed: " err.Message)
+            return false
+        }
     }
 
     static Hide(*) {

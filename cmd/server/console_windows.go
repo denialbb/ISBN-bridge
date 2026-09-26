@@ -8,19 +8,32 @@ import (
 )
 
 var (
-	kernel32            = syscall.NewLazyDLL("kernel32.dll")
-	user32              = syscall.NewLazyDLL("user32.dll")
-	procSetConsoleTitle = kernel32.NewProc("SetConsoleTitleW")
+	kernel32             = syscall.NewLazyDLL("kernel32.dll")
+	user32               = syscall.NewLazyDLL("user32.dll")
+	procSetConsoleTitle  = kernel32.NewProc("SetConsoleTitleW")
 	procGetConsoleWindow = kernel32.NewProc("GetConsoleWindow")
-	procShowWindow      = user32.NewProc("ShowWindow")
-	procIsWindowVisible = user32.NewProc("IsWindowVisible")
-	procSetForeground   = user32.NewProc("SetForegroundWindow")
+	procGetSystemMenu    = user32.NewProc("GetSystemMenu")
+	procDeleteMenu       = user32.NewProc("DeleteMenu")
+	procShowWindow       = user32.NewProc("ShowWindow")
+	procIsWindowVisible  = user32.NewProc("IsWindowVisible")
+	procSetForeground    = user32.NewProc("SetForegroundWindow")
 )
 
 func initConsole() {
 	title, err := syscall.UTF16PtrFromString("ISBN Bridge Server")
 	if err == nil {
 		procSetConsoleTitle.Call(uintptr(unsafe.Pointer(title)))
+	}
+
+	// Remove the Close (X) button from the console system menu so the
+	// window cannot be killed accidentally: visibility is controlled
+	// from the tray menu instead. SC_CLOSE = 0xF060, MF_BYCOMMAND = 0.
+	hwnd, _, _ := procGetConsoleWindow.Call()
+	if hwnd != 0 {
+		hmenu, _, _ := procGetSystemMenu.Call(hwnd, 0)
+		if hmenu != 0 {
+			procDeleteMenu.Call(hmenu, 0xF060, 0)
+		}
 	}
 }
 
