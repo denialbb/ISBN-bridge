@@ -21,7 +21,7 @@ Scanning from an iPhone uses two lightweight, native Apple Shortcuts that requir
 
 > **Zero-Touch Camera Pairing**: Point your normal **iPhone Camera** at the centered QR code on your PC. Tap the yellow web link $\rightarrow$ Safari opens the pairing page and automatically launches the shortcut $\rightarrow$ tap **Open in Shortcuts** $\rightarrow$ configuration is saved and the book scanner launches immediately! No IP lookup or typing required.
 
-*(Official iCloud shortcut link will be added here)*
+*Download: [Pair ISBN Bridge](https://www.icloud.com/shortcuts/2cc219d6251f46d69ce5d6d3f4ce8cc8)*
 
 ---
 
@@ -62,7 +62,7 @@ Scanning from an iPhone uses two lightweight, native Apple Shortcuts that requir
 └────────────────────────────────────────────────────────┘
 ```
 
-*(Official iCloud shortcut link will be added here)*
+*Download: [ISBN Bridge](https://www.icloud.com/shortcuts/46434ad59d2b4bff92f8a2460bee9207)*
 
 ---
 

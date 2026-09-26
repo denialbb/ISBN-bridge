@@ -69,8 +69,6 @@ Scanning on iPhone is handled natively via two lightweight Apple Shortcuts:
 1. **Token Pairing Shortcut**: Scans the centered QR code on your PC monitor and stores the token locally.
 2. **Continuous Scanner Shortcut**: Opens the camera in a fast barcode-scanning loop, signs each ISBN with SHA-256, and posts it to your PC.
 
-> _Shortcut iCloud download links will be added here._
-
 - ISBN Bridge: https://www.icloud.com/shortcuts/46434ad59d2b4bff92f8a2460bee9207
 - Pair ISBN Bridge: https://www.icloud.com/shortcuts/2cc219d6251f46d69ce5d6d3f4ce8cc8
 
