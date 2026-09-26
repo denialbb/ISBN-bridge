@@ -26,7 +26,7 @@ class QRModal {
         this.guiInstance.Add("Text", "Center w" size, "Scansiona Token ISBN Bridge")
 
         this.guiInstance.SetFont("s9 norm c64748b", "Segoe UI")
-        this.guiInstance.Add("Text", "Center w" size " y+4", "Inquadra con l'iPhone per abbinare il comando")
+        this.guiInstance.Add("Text", "Center w" size " y+4", "Inquadra con la fotocamera per abbinare subito")
 
         imgCtrl := this.guiInstance.Add("Picture", "w" size " h" size " Center y+14", tempQR)
         imgCtrl.OnEvent("Click", (*) => this.Hide())

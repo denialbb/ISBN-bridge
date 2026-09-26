@@ -186,3 +186,48 @@ func TestGetQRHtml(t *testing.T) {
 		t.Errorf("expected HTML to contain QR image tag")
 	}
 }
+
+func TestPairEndpoint(t *testing.T) {
+	srv, _, _ := setupTestServer(t)
+
+	// 1. JSON response
+	req := httptest.NewRequest("GET", "/pair?format=json", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Header().Get("Content-Type"), "application/json") {
+		t.Errorf("expected application/json, got %s", rec.Header().Get("Content-Type"))
+	}
+	if !strings.Contains(rec.Body.String(), `"url"`) || !strings.Contains(rec.Body.String(), `"token"`) {
+		t.Errorf("expected JSON to contain url and token: %s", rec.Body.String())
+	}
+
+	// 2. iOS HTML response
+	reqIOS := httptest.NewRequest("GET", "/pair", nil)
+	reqIOS.Header.Set("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15")
+	recIOS := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recIOS, reqIOS)
+
+	if recIOS.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", recIOS.Code)
+	}
+	if !strings.Contains(recIOS.Body.String(), "shortcuts://run-shortcut") {
+		t.Errorf("expected iOS page to include shortcuts URI")
+	}
+
+	// 3. Android HTML response
+	reqAndroid := httptest.NewRequest("GET", "/pair", nil)
+	reqAndroid.Header.Set("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36")
+	recAndroid := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recAndroid, reqAndroid)
+
+	if recAndroid.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", recAndroid.Code)
+	}
+	if !strings.Contains(recAndroid.Body.String(), "isbn_bridge_config.json") {
+		t.Errorf("expected Android page to offer config file download")
+	}
+}

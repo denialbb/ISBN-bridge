@@ -83,8 +83,8 @@ For full setup instructions, see [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 
 ### 3. Pair & Scan
 1. When the Go server starts, a QR code appears in the center of your screen.
-2. Scan the QR code with your phone's **Token Pairing Shortcut**.
-3. Launch the **Scanner Shortcut** and point your camera at any book barcode!
+2. Point your phone's normal **Camera app** at the QR code and tap the link to pair automatically (no typing required!).
+3. Launch your **Scanner Shortcut** and point your camera at any book barcode!
 
 ---
 

@@ -8,12 +8,14 @@ This document describes how mobile scanning works with the ISBN Bridge pipeline,
 
 Scanning from an iPhone uses two lightweight, native Apple Shortcuts that require no third-party App Store applications:
 
-### Shortcut 1: Token Pairing Shortcut
-*Used once when starting a scanning session or after token rotation.*
+### Shortcut 1: Automatic Pairing Shortcut ("Pair ISBN Bridge")
+*Used once when starting a scanning session, changing Wi-Fi networks, or after token rotation.*
 
-1. **Scan QR/Bar Code**: Prompts camera to scan the centered QR code displayed on the desktop monitor.
-2. **Save File**: Writes the scanned token string to local storage (`Shortcuts/isbn_bridge_token.txt` in iCloud Drive / On My iPhone), overwriting any prior token.
-3. **Notification**: Emits a brief haptic/banner confirmation ("Token saved successfully").
+1. **Receive Input**: Receives JSON config payload (`{"url":"...","token":"..."}`) passed directly from the browser or QR scanner.
+2. **Save File**: Writes the configuration dictionary directly to `Shortcuts/isbn_bridge_config.json` in iCloud Drive / On My iPhone (Overwrite: `true`).
+3. **Notification**: Vibrates device and shows confirmation ("Paired with PC at [url]").
+
+> **Zero-Touch Camera Pairing**: Point your normal **iPhone Camera** at the centered QR code on your PC. Tap the yellow web link $\rightarrow$ Safari opens the pairing page and automatically launches the shortcut $\rightarrow$ tap **Open in Shortcuts** $\rightarrow$ done! No IP lookup or typing required.
 
 *(Official iCloud shortcut link will be added here)*
 
@@ -32,8 +34,9 @@ Scanning from an iPhone uses two lightweight, native Apple Shortcuts that requir
 │  2. Format Date (Current Date)                         │
 │     └─ Format: "yyyy-MM-dd HH:mm:ss"                   │
 │                                                        │
-│  3. Read File (Shortcuts/isbn_bridge_token.txt)            │
-│     └─ Retrieve secret token string                    │
+│  3. Read File (Shortcuts/isbn_bridge_config.json)      │
+│     ├─ Get Dictionary Value "url"   -> [Server URL]    │
+│     └─ Get Dictionary Value "token" -> [Token]         │
 │                                                        │
 │  4. Combine Text Block                                 │
 │     └─ Text: [Barcode]|[Formatted Date]|[Token]        │
@@ -42,7 +45,7 @@ Scanning from an iPhone uses two lightweight, native Apple Shortcuts that requir
 │     └─ Produces 64-character hexadecimal signature     │
 │                                                        │
 │  6. Get Contents of URL (HTTP POST)                    │
-│     ├─ URL:     http://<PC_IP>:8765/isbn               │
+│     ├─ URL:     [Server URL]/isbn                      │
 │     ├─ Method:  POST                                   │
 │     ├─ Headers:                                        │
 │     │   ├─ Authorization: Bearer [SHA-256 Hash]        │
@@ -61,14 +64,13 @@ Scanning from an iPhone uses two lightweight, native Apple Shortcuts that requir
 
 ## 2. Setting Up the iPhone
 
-1. **Find PC Local IP Address**:
-   - The Go server prints your PC's LAN IP on startup (e.g. `http://192.168.1.107:8765`).
-   - Alternatively, open Command Prompt on Windows and run `ipconfig`.
-2. **Network Connection**:
-   - Ensure the iPhone is connected to the same local Wi-Fi network as the PC.
-3. **First-Time Pairing**:
-   - Run the **Token Pairing Shortcut** and scan the QR code centered on your monitor.
-4. **Scan Books**:
+1. **Network Connection**:
+   - Ensure the iPhone is connected to the same local Wi-Fi network as your PC.
+2. **One-Tap Pairing**:
+   - Start the Go server and AutoHotkey client on your PC.
+   - Point your iPhone's camera at the centered QR code on your monitor.
+   - Tap the link, then tap **Open in Shortcuts** to save the configuration automatically.
+3. **Scan Books**:
    - Run the **Scanner Shortcut**. The camera scanner opens in a loop. Point it at any book barcode; the ISBN will be validated, authenticated, and pasted onto your PC instantly.
 
 ---

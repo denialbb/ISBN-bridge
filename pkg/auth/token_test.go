@@ -166,3 +166,44 @@ func TestTimestampExpiry(t *testing.T) {
 		t.Error("expected error for expired timestamp (replay attack), got nil")
 	}
 }
+
+func TestPairingPayload(t *testing.T) {
+	tempDir := t.TempDir()
+	tokenFile := filepath.Join(tempDir, "token.txt")
+	mgr := NewTokenManager(tokenFile, time.Hour)
+
+	token, err := mgr.GetToken()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Without baseURL: returns raw token
+	payload, err := mgr.GetPairingPayload()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if payload != token {
+		t.Errorf("expected raw token %q, got %q", token, payload)
+	}
+
+	// With baseURL: returns full pairing URL
+	mgr.SetBaseURL("http://192.168.1.107:8765")
+	if mgr.BaseURL() != "http://192.168.1.107:8765" {
+		t.Errorf("expected base URL http://192.168.1.107:8765, got %q", mgr.BaseURL())
+	}
+
+	payload, err = mgr.GetPairingPayload()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expectedURL := "http://192.168.1.107:8765/pair?token=" + token
+	if payload != expectedURL {
+		t.Errorf("expected pairing URL %q, got %q", expectedURL, payload)
+	}
+
+	// Generate PNG should succeed
+	png, err := mgr.GenerateQRCodePNG()
+	if err != nil || len(png) == 0 {
+		t.Errorf("failed to generate pairing QR PNG: %v", err)
+	}
+}

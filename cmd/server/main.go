@@ -65,18 +65,23 @@ func main() {
 	})
 
 	localIP := getOutboundIP()
+	if localIP == "" {
+		localIP = "127.0.0.1"
+	}
+	serverURL := fmt.Sprintf("http://%s:%d", localIP, appCfg.Port)
+	tokenMgr.SetBaseURL(serverURL)
+
 	log.Printf("Active Token: %s", token)
 	log.Printf("Token TTL:    %v (auto-refreshes)", appCfg.TokenTTL)
 	log.Printf("Listening on: http://0.0.0.0:%d", appCfg.Port)
-	if localIP != "" {
-		log.Printf("  -> iOS Shortcut URL: http://%s:%d/isbn", localIP, appCfg.Port)
-		log.Printf("  -> Browser QR page:   http://%s:%d/qr", localIP, appCfg.Port)
-	}
+	log.Printf("  -> Mobile Pairing URL: %s/pair?token=%s", serverURL, token)
+	log.Printf("  -> Browser QR page:    %s/qr", serverURL)
+	log.Printf("  -> ISBN Post URL:      %s/isbn", serverURL)
 	log.Printf("Forwarding to AutoHotkey at: %s", ahkTarget)
 	log.Println("--------------------------------------------------")
 
 	if !*noQR {
-		fmt.Println("\nScan this QR code with your iPhone to import the active token:")
+		fmt.Println("\nScan this QR code with your phone camera to pair automatically:")
 		if err := tokenMgr.PrintTerminalQR(os.Stdout); err != nil {
 			log.Printf("Failed to render terminal QR code: %v", err)
 		}

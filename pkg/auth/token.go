@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +26,7 @@ type TokenManager struct {
 	createdAt time.Time
 	ttl       time.Duration
 	filePath  string
+	baseURL   string
 }
 
 // NewTokenManager initializes a TokenManager with a persistence file path and token TTL.
@@ -106,6 +108,36 @@ func (m *TokenManager) TTL() time.Duration {
 	return m.ttl
 }
 
+// SetBaseURL configures the base URL (e.g. http://192.168.1.107:8765) for QR pairing.
+func (m *TokenManager) SetBaseURL(url string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.baseURL = strings.TrimSuffix(url, "/")
+}
+
+// BaseURL returns the configured base URL.
+func (m *TokenManager) BaseURL() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.baseURL
+}
+
+// GetPairingPayload returns the pairing URL (http://<base>/pair?token=<token>) or raw token.
+func (m *TokenManager) GetPairingPayload() (string, error) {
+	token, err := m.GetToken()
+	if err != nil {
+		return "", err
+	}
+	m.mu.RLock()
+	base := m.baseURL
+	m.mu.RUnlock()
+
+	if base == "" {
+		return token, nil
+	}
+	return fmt.Sprintf("%s/pair?token=%s", base, token), nil
+}
+
 // CurrentToken returns the currently stored token without refreshing it.
 func (m *TokenManager) CurrentToken() string {
 	m.mu.RLock()
@@ -113,18 +145,18 @@ func (m *TokenManager) CurrentToken() string {
 	return m.token
 }
 
-// GenerateQRCodePNG creates a PNG image of the current token QR code.
+// GenerateQRCodePNG creates a PNG image of the current pairing QR code.
 func (m *TokenManager) GenerateQRCodePNG() ([]byte, error) {
-	token, err := m.GetToken()
+	payload, err := m.GetPairingPayload()
 	if err != nil {
 		return nil, err
 	}
-	return qrcode.Encode(token, qrcode.Medium, 256)
+	return qrcode.Encode(payload, qrcode.Medium, 256)
 }
 
-// PrintTerminalQR prints an ANSI QR code of the current token to the given writer.
+// PrintTerminalQR prints an ANSI QR code of the current pairing payload to the given writer.
 func (m *TokenManager) PrintTerminalQR(w io.Writer) error {
-	token, err := m.GetToken()
+	payload, err := m.GetPairingPayload()
 	if err != nil {
 		return err
 	}
@@ -136,7 +168,7 @@ func (m *TokenManager) PrintTerminalQR(w io.Writer) error {
 		WhiteChar: qrterminal.WHITE,
 		QuietZone: 1,
 	}
-	qrterminal.GenerateWithConfig(token, config)
+	qrterminal.GenerateWithConfig(payload, config)
 	return nil
 }
 
