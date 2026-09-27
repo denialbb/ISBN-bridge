@@ -27,12 +27,19 @@ class HttpListener {
         NumPut("Int", 1, reuseOpt, 0)
         DllCall("Ws2_32\setsockopt", "Ptr", this.serverSocket, "Int", 0xFFFF, "Int", 0x0004, "Ptr", reuseOpt.Ptr, "Int", 4, "Int")
 
-        ; Bind to 127.0.0.1 (localhost only)
+        ; Bind to 127.0.0.1 (localhost only). The paste endpoint takes
+        ; unauthenticated body text, so it must never reach the LAN.
+        ; Bytes are stored in network order: 127.0.0.1 (a plain
+        ; NumPut("UInt", 0x7F000001) would land little-endian as
+        ; 1.0.0.127 and fail with WSAEADDRNOTAVAIL).
         address := Buffer(16, 0)
         NumPut("UShort", 2, address, 0) ; AF_INET
         netPort := DllCall("Ws2_32\htons", "UShort", port, "UShort")
         NumPut("UShort", netPort, address, 2)
-        NumPut("UInt", 0, address, 4)   ; Bind to local interfaces
+        NumPut("UChar", 127, address, 4)
+        NumPut("UChar", 0, address, 5)
+        NumPut("UChar", 0, address, 6)
+        NumPut("UChar", 1, address, 7)
 
         bound := false
         Loop 10 {
@@ -152,6 +159,17 @@ class HttpListener {
             return
         }
 
+        ; Every request must carry the Go forwarder's shared secret
+        ; (local_secret.txt, written by the server at startup). The
+        ; listener only binds localhost, so this is defense in depth
+        ; against other local processes — not the primary barrier.
+        if !this.HasLocalSecret(request, headerEnd) {
+            Logger.Log("Rejected request without forwarder secret")
+            this.SendResponse(sock, 403, "Forbidden", "Missing forwarder secret")
+            this.CloseClient(sock)
+            return
+        }
+
         requestLine := SubStr(request, 1, lineEnd - 1)
 
         ; Action: Show Centered QR
@@ -209,6 +227,42 @@ class HttpListener {
         }
 
         this.CloseClient(sock)
+    }
+
+    static secretWarned := false
+
+    static FindSecretFile() {
+        if FileExist(A_ScriptDir "\local_secret.txt")
+            return A_ScriptDir "\local_secret.txt"
+        if FileExist(A_ScriptDir "\..\local_secret.txt")
+            return A_ScriptDir "\..\local_secret.txt"
+        return ""
+    }
+
+    ; The server rewrites local_secret.txt on every start; read it fresh
+    ; per request so a server restart needs no client restart. Missing
+    ; file (e.g. manually started server elsewhere) falls back to
+    ; localhost-only trust with a one-time warning.
+    static HasLocalSecret(request, headerEnd) {
+        path := this.FindSecretFile()
+        if (path = "") {
+            if !this.secretWarned {
+                this.secretWarned := true
+                Logger.Log("Warning: local_secret.txt not found; accepting localhost requests without forwarder secret.")
+            }
+            return true
+        }
+        try
+            expected := Trim(FileRead(path, "UTF-8"))
+        catch {
+            return false
+        }
+        if (expected = "")
+            return false
+        headers := SubStr(request, 1, headerEnd + 3)
+        if RegExMatch(headers, "im)^X-ISBN-Bridge-Local:\s*(\S+)", &m)
+            return (m[1] == expected)
+        return false
     }
 
     static SendResponse(sock, statusCode, reason, body) {

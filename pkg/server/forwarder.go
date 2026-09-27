@@ -16,10 +16,16 @@ type Forwarder interface {
 	HideQR(ctx context.Context) error
 }
 
+// LocalSecretHeader authenticates the Go forwarder to the local
+// AutoHotkey listener. The secret is generated at server startup and
+// written to local_secret.txt next to the token file (0600).
+const LocalSecretHeader = "X-ISBN-Bridge-Local"
+
 // AHKForwarder sends actions to the local AutoHotkey script via HTTP.
 type AHKForwarder struct {
-	baseURL string
-	client  *http.Client
+	baseURL     string
+	client      *http.Client
+	localSecret string
 }
 
 // NewAHKForwarder creates a new AHKForwarder targeting the given base URL or port.
@@ -39,6 +45,12 @@ func NewAHKForwarder(target string) *AHKForwarder {
 			Timeout: 2 * time.Second,
 		},
 	}
+}
+
+// SetLocalSecret sets the shared secret sent to the AutoHotkey
+// listener. Empty means no secret header is sent.
+func (f *AHKForwarder) SetLocalSecret(secret string) {
+	f.localSecret = secret
 }
 
 // Forward delivers the validated ISBN to the local AutoHotkey listener.
@@ -63,6 +75,9 @@ func (f *AHKForwarder) post(ctx context.Context, path, body string) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "text/plain; charset=utf-8")
+	if f.localSecret != "" {
+		req.Header.Set(LocalSecretHeader, f.localSecret)
+	}
 
 	resp, err := f.client.Do(req)
 	if err != nil {

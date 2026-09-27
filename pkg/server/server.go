@@ -126,17 +126,36 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /isbn", s.handlePostISBN)
 	s.mux.HandleFunc("GET /qr", s.handleGetQRHTML)
 	s.mux.HandleFunc("GET /qr.png", s.handleGetQRPNG)
-	s.mux.HandleFunc("POST /qr/show", s.handleShowQR)
-	s.mux.HandleFunc("POST /token/refresh", s.handleRefreshToken)
-	s.mux.HandleFunc("POST /token/ttl", s.handleSetTTL)
 	s.mux.HandleFunc("GET /health", s.handleHealth)
 	s.mux.HandleFunc("GET /pair", s.handlePair)
-	s.mux.HandleFunc("POST /console/show", s.handleConsoleShow)
-	s.mux.HandleFunc("POST /console/hide", s.handleConsoleHide)
-	s.mux.HandleFunc("POST /console/toggle", s.handleConsoleToggle)
-	s.mux.HandleFunc("GET /console", s.handleConsoleStatus)
-	s.mux.HandleFunc("POST /shutdown", s.handleShutdown)
 	s.mux.HandleFunc("GET /", s.handleRoot)
+	// Control plane: desktop client only. The phone never calls these;
+	// gating them to loopback keeps LAN neighbors from rotating the
+	// token, toggling the console, or stopping the server.
+	s.mux.HandleFunc("POST /qr/show", requireLoopback(s.handleShowQR))
+	s.mux.HandleFunc("POST /token/refresh", requireLoopback(s.handleRefreshToken))
+	s.mux.HandleFunc("POST /token/ttl", requireLoopback(s.handleSetTTL))
+	s.mux.HandleFunc("POST /console/show", requireLoopback(s.handleConsoleShow))
+	s.mux.HandleFunc("POST /console/hide", requireLoopback(s.handleConsoleHide))
+	s.mux.HandleFunc("POST /console/toggle", requireLoopback(s.handleConsoleToggle))
+	s.mux.HandleFunc("GET /console", requireLoopback(s.handleConsoleStatus))
+	s.mux.HandleFunc("POST /shutdown", requireLoopback(s.handleShutdown))
+}
+
+// requireLoopback rejects requests that did not arrive over the local
+// machine (127.0.0.1 or ::1). Used for the control endpoints the
+// desktop client calls; the phone only needs /isbn, /qr*, /pair and
+// /health.
+func requireLoopback(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		host := clientIP(r)
+		if host != "127.0.0.1" && host != "::1" {
+			log.Printf("Control endpoint %s rejected for non-loopback client %s", r.URL.Path, r.RemoteAddr)
+			http.Error(w, "Forbidden: localhost only", http.StatusForbidden)
+			return
+		}
+		next(w, r)
+	}
 }
 
 func (s *Server) handlePostISBN(w http.ResponseWriter, r *http.Request) {
@@ -345,7 +364,7 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Token refreshed: %s", newToken)
+	log.Printf("Token refreshed (prefix %.8s...)", newToken)
 
 	if s.forwarder != nil {
 		go func() {
@@ -391,7 +410,7 @@ func (s *Server) handleSetTTL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Token TTL updated to %d minutes. New token: %s", mins, newToken)
+	log.Printf("Token TTL updated to %d minutes (prefix %.8s...)", mins, newToken)
 
 	if s.forwarder != nil {
 		go func() {

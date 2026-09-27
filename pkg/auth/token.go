@@ -221,13 +221,25 @@ func (m *TokenManager) PrintTerminalQR(w io.Writer) error {
 }
 
 func GenerateRandomToken(length int) (string, error) {
-	bytes := make([]byte, length)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
+	// Rejection sampling avoids modulo bias: 256 is not a multiple of
+	// the 62-character alphabet size, so plain `byte % 62` would favor
+	// the first few characters.
+	maxUnbiased := byte(256 - (256 % len(tokenCharset)))
+	out := make([]byte, 0, length)
+	chunk := make([]byte, length)
+	for len(out) < length {
+		if _, err := rand.Read(chunk); err != nil {
+			return "", err
+		}
+		for _, b := range chunk {
+			if b >= maxUnbiased {
+				continue
+			}
+			out = append(out, tokenCharset[b%byte(len(tokenCharset))])
+			if len(out) == length {
+				break
+			}
+		}
 	}
-	charLen := byte(len(tokenCharset))
-	for i := 0; i < length; i++ {
-		bytes[i] = tokenCharset[bytes[i]%charLen]
-	}
-	return string(bytes), nil
+	return string(out), nil
 }

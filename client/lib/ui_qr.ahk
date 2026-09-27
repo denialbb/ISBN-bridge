@@ -47,6 +47,13 @@ class QRModal {
         imgCtrl := this.guiInstance.Add("Picture", "w" size " h" size " Center y+2", tempQR)
         imgCtrl.OnEvent("Click", (*) => this.Hide())
 
+        ; The PNG embeds the live pairing token: remove it once the
+        ; control has loaded it so nothing token-bearing lingers in %TEMP%.
+        try FileDelete(tempQR)
+        catch as err {
+            Logger.Log("QRModal temp cleanup failed: " err.Message)
+        }
+
         ; Minimal single-line hint, matched to brand ink
         this.guiInstance.SetFont("s8 norm c2F4A6E", "Tahoma")
         hintCtrl := this.guiInstance.Add("Text", "Center w" size " y+8", I18n.Get("qr_hint"))

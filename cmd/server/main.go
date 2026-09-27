@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -59,6 +60,20 @@ func main() {
 		log.Fatalf("Failed to initialize token: %v", err)
 	}
 
+	// Shared secret for the local AutoHotkey listener: proves that
+	// /paste, /qr/show and /qr/hide requests come from this server.
+	// Written next to the token file (0600); the client re-reads it
+	// per request, so server restarts need no client restart.
+	localSecret, err := auth.GenerateRandomToken(32)
+	if err != nil {
+		log.Fatalf("Failed to generate local secret: %v", err)
+	}
+	secretPath := filepath.Join(filepath.Dir(*tokenFile), "local_secret.txt")
+	if err := os.WriteFile(secretPath, []byte(localSecret), 0600); err != nil {
+		log.Printf("Warning: cannot persist local secret (%v); AHK paste auth disabled", err)
+		localSecret = ""
+	}
+
 	shutdownChan := make(chan struct{})
 	shutdownFunc := func() {
 		select {
@@ -71,6 +86,7 @@ func main() {
 	verifier := auth.NewVerifier(appCfg.MaxSkew)
 	ahkTarget := fmt.Sprintf("http://127.0.0.1:%d", appCfg.AHKPort)
 	forwarder := server.NewAHKForwarder(ahkTarget)
+	forwarder.SetLocalSecret(localSecret)
 
 	srv := server.NewServer(server.Config{
 		TokenManager:     tokenMgr,
@@ -92,7 +108,7 @@ func main() {
 	serverURL := fmt.Sprintf("http://%s:%d", localIP, appCfg.Port)
 	tokenMgr.SetBaseURL(serverURL)
 
-	log.Printf("Active Token: %s", token)
+	log.Printf("Active Token: %.8s... (full token only via /pair on LAN)", token)
 	log.Printf("Token TTL:    %v (auto-refreshes)", appCfg.TokenTTL)
 	log.Printf("Timestamp skew window: ±%v", appCfg.MaxSkew)
 	log.Printf("Rate limit:   %d req / %v per IP on POST /isbn", appCfg.RateLimitMax, appCfg.RateLimitWindow)

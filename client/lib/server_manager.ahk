@@ -73,7 +73,7 @@ class ServerManager {
                 req := ComObject("MSXML2.XMLHTTP")
                 req.open("GET", AppConfig.goServerUrl "/health", false)
                 req.send()
-                if (req.status = 200)
+                if (req.status == 200)
                     return true
             } catch {
             }
@@ -164,10 +164,9 @@ class ServerManager {
 
         Sleep(200)
 
-        ; 2. Terminate server if still running
+        ; Only stop the server we manage (by PID). Never kill by name:
+        ; the user may run an independent server we must not touch.
         if this.serverPid && ProcessExist(this.serverPid)
             ProcessClose(this.serverPid)
-        if ProcessExist("isbn-bridge-server.exe")
-            ProcessClose("isbn-bridge-server.exe")
     }
 }
