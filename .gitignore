@@ -21,6 +21,9 @@ token.txt
 local_secret.txt
 qr.png
 
+# Local promo drafts (never published)
+promo/
+
 # OS / Editor
 .DS_Store
 Thumbs.db
