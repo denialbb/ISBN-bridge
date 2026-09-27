@@ -9,7 +9,7 @@
 
 **ISBN Bridge** connects mobile barcode scanning to your PC. Scan book barcodes with your phone; each ISBN is checked and pasted into the active field on your PC.
 
-<video src="docs/assets/bridge_demo.mp4" width="100%" controls></video>
+<video src="https://github.com/denialbb/ISBN-bridge/releases/download/v1.0.3/bridge_demo.mp4" width="100%" controls></video>
 
 ---
 
