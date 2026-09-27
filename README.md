@@ -83,6 +83,14 @@ For full setup instructions, see [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 
 ---
 
+## Requirements
+
+- A Windows 10/11 PC and a phone on the **same Wi-Fi network**.
+- iPhone: the Shortcuts app (preinstalled). Android: [HTTP Shortcuts](https://f-droid.org/packages/ch.rmy.android.http_shortcuts/) + [Binary Eye](https://f-droid.org/packages/de.markusfisch.android.binaryeye/) (both free, open-source).
+- The release zip needs nothing installed — no AutoHotkey, no admin rights. Building from source needs the Go toolchain and AutoHotkey v2.
+
+---
+
 ## Quick Start
 
 ### Recommended: download the release
