@@ -50,11 +50,13 @@ class I18n {
     ; Custom INI reader. The Win32 INI API (IniRead) silently drops the
     ; first section when a file starts with a UTF-8 BOM — which is what
     ; Notepad writes by default — so translators' files would lose [meta].
-    ; FileRead detects BOMs correctly; we parse sections ourselves.
+    ; Explicit UTF-8: without it, BOM-less files decode as ANSI and every
+    ; non-ASCII string (bullet, accents) renders as mojibake. The manual
+    ; BOM strip below covers editors that add one.
     static LoadIniFile(path) {
         sections := Map()
         try
-            text := FileRead(path)
+            text := FileRead(path, "UTF-8")
         catch
             return sections
         if (SubStr(text, 1, 1) = Chr(0xFEFF))
