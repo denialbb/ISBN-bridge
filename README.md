@@ -1,6 +1,8 @@
 # ISBN Bridge
 
-<video src="https://github.com/denialbb/ISBN-bridge/releases/download/v1.0.3/bridge_demo.mp4" width="100%" controls></video>
+[![Watch the demo](docs/assets/demo-poster.jpg)](https://github.com/denialbb/ISBN-bridge/blob/main/docs/assets/bridge_demo.mp4)
+
+*Phone pairs over Wi-Fi, then a scanned ISBN lands in the PC text field — [watch the 14s demo](https://github.com/denialbb/ISBN-bridge/blob/main/docs/assets/bridge_demo.mp4).*
 
 ![Go 1.26](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white)
