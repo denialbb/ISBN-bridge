@@ -134,6 +134,21 @@ check runs three times: at click time, 100 ms later in `OnDeferredClick`,
 and immediately before `SendInput` in `PasteNow` — so a window switch in the
 arming gap aborts the paste instead of mistyping into the wrong app.
 
+### 4.5 Local Control Plane
+
+The endpoints the desktop client drives (`/token/refresh`, `/token/ttl`,
+`/shutdown`, `/console/*`, `/qr/show`) accept loopback requests only
+(`127.0.0.1`, `::1`); LAN callers get `403`. The phone only needs `/isbn`,
+`/qr*`, `/pair`, and `/health`, which stay LAN-reachable.
+
+The hop from Go to AutoHotkey (`127.0.0.1:8766`, bound to localhost) needs
+a second credential: the server generates a 32-character secret at startup,
+stores it in `local_secret.txt` (`0600`) next to the token file, and sends
+it as `X-ISBN-Bridge-Local` on every forward. The client re-reads the file
+per request, so server restarts need no client restart. The pairing QR PNG
+is deleted from `%TEMP%` as soon as the popup loads it, and server logs
+only print token prefixes, never full tokens.
+
 ---
 
 ## 5. Token Lifecycle & Management

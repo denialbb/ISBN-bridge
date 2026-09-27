@@ -69,15 +69,15 @@ The Go backend acts as the secure gateway between mobile devices on the local Wi
 | `GET` | `/qr.png` | Raw PNG of the active token QR code (used by the AHK modal popup). |
 | `GET` | `/pair` | Pairing page for phones: auto-launches the iOS shortcut or offers the config JSON. Append `?format=json` for JSON. |
 | `GET` | `/` | Redirects to `/qr`. |
-| `POST` | `/qr/show` | Triggers the centered AutoHotkey QR popup on the desktop. |
-| `POST` | `/token/refresh` | Immediately rotates the active token and triggers the QR popup. Returns the new token as JSON. |
-| `POST` | `/token/ttl?minutes=N` | Updates the token TTL and regenerates the active token. |
+| `POST` | `/qr/show` | Triggers the centered AutoHotkey QR popup on the desktop. Localhost only. |
+| `POST` | `/token/refresh` | Immediately rotates the active token and triggers the QR popup. Returns the new token as JSON. Localhost only. |
+| `POST` | `/token/ttl?minutes=N` | Updates the token TTL and regenerates the active token. Localhost only. |
 | `GET` | `/health` | Returns JSON status including expiry state, TTL, and server time. |
-| `POST` | `/console/show`, `/console/hide`, `/console/toggle` | Show, hide, or toggle the server console window (called by the desktop client). |
-| `GET` | `/console` | Returns whether the server console is visible. |
-| `POST` | `/shutdown` | Stops the server (called by the desktop client on exit). |
+| `POST` | `/console/show`, `/console/hide`, `/console/toggle` | Show, hide, or toggle the server console window (called by the desktop client). Localhost only. |
+| `GET` | `/console` | Returns whether the server console is visible. Localhost only. |
+| `POST` | `/shutdown` | Stops the server (called by the desktop client on exit). Localhost only. |
 
-The AutoHotkey listener on port `8766` exposes `POST /paste`, `/qr/show`, and `/qr/hide` for the Go forwarder.
+The AutoHotkey listener on `127.0.0.1:8766` exposes `POST /paste`, `/qr/show`, and `/qr/hide` for the Go forwarder. Every request must carry the `X-ISBN-Bridge-Local` shared secret (written to `local_secret.txt` at server startup); requests without it get `403`.
 
 ---
 
@@ -104,7 +104,7 @@ client/
 1. **Winsock Non-Blocking Listener (`lib/server.ahk`)**:
    - Uses native `ws2_32.dll` system calls (`socket`, `ioctlsocket(FIONBIO)`, `bind`, `listen`, `recv`).
    - Polls active sockets via bound method timers (`ObjBindMethod`) at 40 Hz (25 ms period) without blocking the Windows message pump.
-   - Binds port `8766` on all interfaces (`0.0.0.0`). Localhost-only binding is a pending hardening item — see `docs/SECURITY.md`.
+   - Binds port `8766` on `127.0.0.1` only, so only the local machine can reach it.
 
 2. **Paste & Hover Engine (`lib/paste.ahk`)**:
    - **Hover Insertion**: When the pointer is over an `IBeam` cursor in the target window (e.g. `hardcover`), the ISBN is pasted with no click.
