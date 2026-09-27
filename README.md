@@ -1,13 +1,13 @@
 # ISBN Bridge
 
-[![Watch the full-quality video](docs/assets/bridge_demo.gif)](https://github.com/denialbb/ISBN-bridge/blob/main/docs/assets/bridge_demo.mp4)
-
 ![Go 1.26](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white)
 ![AutoHotkey v2](https://img.shields.io/badge/AutoHotkey-v2-334455?logo=autohotkey&logoColor=white)
 ![iOS Shortcuts](https://img.shields.io/badge/iOS-Shortcuts-black?logo=apple&logoColor=white)
 ![SHA-256 auth](https://img.shields.io/badge/auth-SHA--256-success)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+
+[![Watch the full-quality video](docs/assets/bridge_demo.gif)](https://github.com/denialbb/ISBN-bridge/blob/main/docs/assets/bridge_demo.mp4)
 
 **ISBN Bridge** connects mobile barcode scanning to your PC. Scan book barcodes with your phone; each ISBN is checked and pasted into the active field on your PC.
 
