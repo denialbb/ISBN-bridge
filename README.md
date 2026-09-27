@@ -85,7 +85,7 @@ For full setup instructions, see [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 
 ### Recommended: download the release
 
-1. Get `ISBN-Bridge-v1.0.2-windows-x64.zip` from the
+1. Get `ISBN-Bridge-v1.0.3-windows-x64.zip` from the
    [Releases page](https://github.com/denialbb/ISBN-bridge/releases) and
    extract it anywhere (e.g. `Documents\ISBN-Bridge`).
 2. Double-click **`ISBN-Bridge.exe`** — it starts the server automatically

@@ -18,6 +18,7 @@ isbn-bridge-debug.log
 
 # Token & sensitive data
 token.txt
+local_secret.txt
 qr.png
 
 # OS / Editor
