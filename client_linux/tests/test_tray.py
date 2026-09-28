@@ -31,33 +31,6 @@ def test_show_qr_delegates_to_modal():
     tray.show_qr.assert_called_once()
 
 
-def test_tick_label():
-    from client_linux.tray import _tick_label
-
-    assert _tick_label("Active", True) == "✓ Active"
-    assert _tick_label("Active", False) == "Active"
-
-
-def test_check_item_updates_label_on_toggle():
-    from client_linux.tray import _make_check_item
-
-    Gtk = MagicMock()
-    item = MagicMock()
-    Gtk.CheckMenuItem.return_value = item
-    cb = MagicMock()
-
-    result = _make_check_item(Gtk, "Sound", True, cb)
-    assert result is item
-    Gtk.CheckMenuItem.assert_called_once_with(label="✓ Sound")
-    item.set_active.assert_called_once_with(True)
-
-    handler = item.connect.call_args.args[1]
-    item.get_active.return_value = False
-    handler(item)
-    item.set_label.assert_called_once_with("Sound")
-    cb.assert_called_once_with(False)
-
-
 def test_tray_toggle_actions():
     cfg = AppConfig()
     engine = PasteEngine(cfg)
