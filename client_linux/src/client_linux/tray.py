@@ -84,12 +84,16 @@ class TrayManager:
             menu = self._build_gtk_menu(Gtk)
             self.indicator.set_menu(menu)
 
-            # Click handling (StatusNotifierItem semantics):
-            # - ContextMenu (right click) opens the menu set above.
-            # - Activate (left/middle click) triggers the secondary target
-            #   below, i.e. the "Show QR" item. AyatanaAppIndicator3 exposes
-            #   no "activate" signal on Indicator, so there is nothing else
-            #   to connect here.
+            # Click handling (StatusNotifierItem semantics, verified live and
+            # against libayatana-appindicator src/app-indicator.c
+            # bus_method_call): the library activates the secondary target
+            # ONLY on SecondaryActivate/XAyatanaSecondaryActivate (middle
+            # click). A primary Activate (left click) hits the `else` branch
+            # there ("unknown method" warning) and is swallowed inside the
+            # library: AyatanaAppIndicator3.Indicator exposes zero GObject
+            # signals, so there is deliberately nothing to connect here.
+            # Quickshell's tray sends activate() on left click (Tray.qml),
+            # which is why left click is currently a no-op for this item.
             if hasattr(self, "_item_qr") and self._item_qr:
                 try:
                     self.indicator.set_secondary_activate_target(self._item_qr)
@@ -101,10 +105,6 @@ class TrayManager:
         self._thread = threading.Thread(target=run, daemon=True)
         self._thread.start()
         Logger.log("TrayManager: AppIndicator initialized")
-
-    def _on_indicator_activate(self, indicator=None, x: int = 0, y: int = 0) -> None:
-        """Handle left-click activation on the tray indicator."""
-        self.show_qr()
 
     def _find_icon(self) -> Tuple[str, Optional[str]]:
         """Find tray icon, returning (icon_name, theme_dir)."""

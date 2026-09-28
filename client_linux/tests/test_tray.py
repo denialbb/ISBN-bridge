@@ -21,13 +21,13 @@ def test_find_icon():
         assert theme_dir is not None
 
 
-def test_on_indicator_activate():
+def test_show_qr_delegates_to_modal():
     cfg = AppConfig()
     engine = PasteEngine(cfg)
     tray = TrayManager(cfg, engine)
     tray.show_qr = MagicMock()
 
-    tray._on_indicator_activate(None, 0, 0)
+    tray.show_qr()
     tray.show_qr.assert_called_once()
 
 
@@ -151,11 +151,13 @@ def _install_fake_appindicator(monkeypatch):
 
 
 def test_start_wires_menu_and_click_targets(monkeypatch):
-    """Right click must get the menu; left/middle click must target Show-QR.
+    """Right click must get the menu; middle click must target Show-QR.
 
-    AyatanaAppIndicator3.Indicator has no "activate" signal: the SNI
-    Activate action is delivered via the secondary-activate target, so the
-    tray must not rely on connecting to a nonexistent signal.
+    AyatanaAppIndicator3.Indicator has no signals at all: the library
+    activates the secondary target only on SecondaryActivate (middle
+    click) and swallows a primary Activate (left click) internally
+    (upstream bus_method_call "unknown method" branch), so the tray must
+    not rely on connecting to a nonexistent signal.
     """
     appindicator, Gtk, indicator, menus = _install_fake_appindicator(monkeypatch)
     cfg = AppConfig()
@@ -171,7 +173,9 @@ def test_start_wires_menu_and_click_targets(monkeypatch):
     top_menu = indicator.set_menu.call_args.args[0]
     assert top_menu in menus
     top_menu.show_all.assert_called_once()
-    # Left/middle-click target is the Show-QR item from the menu.
+    # Middle-click target is the Show-QR item from the menu.
+    # (Left-click Activate is swallowed inside libayatana-appindicator;
+    # there is no app-side hook for it. See TrayManager click comment.)
     indicator.set_secondary_activate_target.assert_called_once_with(tray._item_qr)
     # No reliance on the nonexistent Indicator "activate" signal.
     activate_connects = [
