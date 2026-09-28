@@ -375,6 +375,7 @@ func TestPairSpinnerInterstitial(t *testing.T) {
 		"Pair%20ISBN%20Bridge",
 		"ISBN%20Bridge%20Pair",
 		"visibilityState",
+		`<body class="ios-top">`,
 	} {
 		if !strings.Contains(bodyIOS, want) {
 			t.Errorf("expected iOS interstitial to contain %q", want)

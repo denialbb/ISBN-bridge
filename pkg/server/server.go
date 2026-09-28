@@ -636,6 +636,7 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 
 	autoRedirectScript := ""
 	actionSection := ""
+	bodyClass := ""
 
 	if isIOS {
 		// Loading interstitial: attempt the primary Pair shortcut on load,
@@ -643,6 +644,10 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 		// in the foreground (i.e. the first jump was blocked or the
 		// shortcut is saved under its alternate name). Manual actions stay
 		// hidden behind <details> so first paint never looks like a choice.
+		// The card is top-anchored (body.ios-top) so the spinner stays
+		// visible in the top half, below the system "Open in Shortcuts?"
+		// banner, instead of being centered behind it.
+		bodyClass = "ios-top"
 		autoRedirectScript = fmt.Sprintf(`
   <script>
     window.onload = function() {
@@ -709,6 +714,7 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 24px 16px; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    body.ios-top { justify-content: flex-start; padding-top: 6vh; }
     .card { background: #1e293b; width: 100%; max-width: 440px; border-radius: 20px; padding: 24px 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); border: 1px solid #334155; text-align: center; }
     .lang-bar { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 12px; }
     .lang-btn { font-size: 11px; padding: 4px 9px; border-radius: 6px; text-decoration: none; color: #94a3b8; background: #0f172a; border: 1px solid #334155; font-weight: 600; }
@@ -741,9 +747,9 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
   </style>
   {{AUTO_REDIRECT}}
 </head>
-<body>
-  <div class="card">
-    {{LANG_BAR}}
+   <body class="{{BODY_CLASS}}">
+     <div class="card">
+       {{LANG_BAR}}
     {{BADGE}}
     <h1>` + title + `</h1>
     <p class="desc">` + desc + `</p>
@@ -785,6 +791,7 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 
 	replacer := strings.NewReplacer(
 		"{{AUTO_REDIRECT}}", autoRedirectScript,
+		"{{BODY_CLASS}}", bodyClass,
 		"{{LANG_BAR}}", langBar,
 		"{{BADGE}}", badgeHTML,
 		"{{ACTIONS}}", actionSection,

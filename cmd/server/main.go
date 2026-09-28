@@ -129,6 +129,7 @@ func main() {
 	log.Printf("Network mode: %s (interface: %s, IP: %s, type: %s)",
 		appCfg.NetworkMode, selectedIface.Name, selectedIface.IP, selectedIface.Type)
 	log.Printf("Listening on: http://0.0.0.0:%d", appCfg.Port)
+	log.Printf("Phone on Wi-Fi timing out? The port is likely firewalled: sudo ufw allow %d/tcp", appCfg.Port)
 	log.Printf("  -> Mobile Pairing URL: %s/pair (access via QR scan)", serverURL)
 	log.Printf("  -> Browser QR page:    %s/qr", serverURL)
 	log.Printf("  -> ISBN Post URL:      %s/isbn", serverURL)
