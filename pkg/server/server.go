@@ -565,13 +565,24 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Query().Get("format") == "json" || strings.Contains(r.Header.Get("Accept"), "application/json") {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		ifaceType := "lan"
+		if strings.Contains(serverURL, "172.20.10.") {
+			ifaceType = "usb_ios"
+		} else if strings.Contains(serverURL, "192.168.42.") || strings.Contains(serverURL, "192.168.43.") || strings.Contains(serverURL, "192.168.44.") {
+			ifaceType = "usb_android"
+		}
+		resp := map[string]any{
 			"status":         "ok",
 			"url":            serverURL,
 			"token":          activeToken,
 			"token_mismatch": tokenMismatch,
 			"ttl_minutes":    int(s.tokenMgr.TTL().Minutes()),
-		})
+			"interface_type": ifaceType,
+		}
+		if s.appConfig != nil {
+			resp["network_mode"] = s.appConfig.NetworkMode
+		}
+		json.NewEncoder(w).Encode(resp)
 		return
 	}
 
@@ -586,7 +597,14 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 	primaryShortcutURI := fmt.Sprintf("shortcuts://run-shortcut?name=Pair%%20ISBN%%20Bridge&input=text&text=%s", escapedJSON)
 	altShortcutURI := fmt.Sprintf("shortcuts://run-shortcut?name=ISBN%%20Bridge%%20Pair&input=text&text=%s", escapedJSON)
 
-	badgeHTML := `<div class="badge"><span class="dot"></span> ` + T("pair_badge_connected") + `</div>`
+	connTypeLabel := "Wi-Fi / LAN"
+	if strings.Contains(serverURL, "172.20.10.") {
+		connTypeLabel = "⚡ USB Cable (iPhone)"
+	} else if strings.Contains(serverURL, "192.168.42.") || strings.Contains(serverURL, "192.168.43.") || strings.Contains(serverURL, "192.168.44.") {
+		connTypeLabel = "⚡ USB Cable (Android)"
+	}
+
+	badgeHTML := `<div class="badge"><span class="dot"></span> ` + T("pair_badge_connected") + ` (` + connTypeLabel + `)</div>`
 	if tokenMismatch {
 		badgeHTML = `<div class="badge warn"><span class="dot"></span> ` + T("pair_badge_refreshed") + `</div>`
 	}
@@ -699,6 +717,10 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
         <span class="info-val">{{SERVER_URL}}</span>
       </div>
       <div class="info-row">
+        <span class="info-label">Interface</span>
+        <span class="info-val">{{CONN_TYPE}}</span>
+      </div>
+      <div class="info-row">
         <span class="info-label">` + ttlLabel + `</span>
         <span class="info-val">{{TTL_MINUTES}} min</span>
       </div>
@@ -725,6 +747,7 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 		"{{BADGE}}", badgeHTML,
 		"{{ACTIONS}}", actionSection,
 		"{{SERVER_URL}}", serverURL,
+		"{{CONN_TYPE}}", connTypeLabel,
 		"{{TTL_MINUTES}}", strconv.Itoa(int(s.tokenMgr.TTL().Minutes())),
 		"{{CONFIG_JSON_LITERAL}}", strconv.Quote(configJSON),
 	)

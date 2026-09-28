@@ -29,8 +29,9 @@ type TokenManager struct {
 	token     string
 	createdAt time.Time
 	ttl       time.Duration
-	filePath  string
-	baseURL   string
+	filePath    string
+	baseURL     string
+	urlResolver func() string
 }
 
 // NewTokenManager initializes a TokenManager with a persistence file path and token TTL.
@@ -119,11 +120,26 @@ func (m *TokenManager) SetBaseURL(url string) {
 	m.baseURL = strings.TrimSuffix(url, "/")
 }
 
-// BaseURL returns the configured base URL.
+// SetURLResolver configures a dynamic callback function to resolve the latest server base URL.
+func (m *TokenManager) SetURLResolver(resolver func() string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.urlResolver = resolver
+}
+
+// BaseURL returns the configured base URL (or resolves it dynamically if a resolver is registered).
 func (m *TokenManager) BaseURL() string {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.baseURL
+	resolver := m.urlResolver
+	base := m.baseURL
+	m.mu.RUnlock()
+
+	if resolver != nil {
+		if resolved := resolver(); resolved != "" {
+			return strings.TrimSuffix(resolved, "/")
+		}
+	}
+	return base
 }
 
 // GetPairingPayload returns the pairing URL (http://<base>/pair?token=<token>) or raw token.
@@ -132,9 +148,7 @@ func (m *TokenManager) GetPairingPayload() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	m.mu.RLock()
-	base := m.baseURL
-	m.mu.RUnlock()
+	base := m.BaseURL()
 
 	if base == "" {
 		return token, nil

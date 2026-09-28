@@ -224,6 +224,22 @@ func TestPairingPayload(t *testing.T) {
 	if err != nil || len(png) == 0 {
 		t.Errorf("failed to generate pairing QR PNG: %v", err)
 	}
+
+	// Dynamic URL resolver overrides static baseURL
+	mgr.SetURLResolver(func() string {
+		return "http://172.20.10.2:8765"
+	})
+	if mgr.BaseURL() != "http://172.20.10.2:8765" {
+		t.Errorf("expected dynamic resolver URL, got %q", mgr.BaseURL())
+	}
+	payload, err = mgr.GetPairingPayload()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expectedUSBURL := "http://172.20.10.2:8765/pair?token=" + token
+	if payload != expectedUSBURL {
+		t.Errorf("expected dynamic pairing URL %q, got %q", expectedUSBURL, payload)
+	}
 }
 
 func TestQRRecolorBrandInk(t *testing.T) {

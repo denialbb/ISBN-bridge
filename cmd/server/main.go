@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/denialbb/isbn-bridge/pkg/auth"
 	"github.com/denialbb/isbn-bridge/pkg/config"
+	"github.com/denialbb/isbn-bridge/pkg/netutil"
 	"github.com/denialbb/isbn-bridge/pkg/server"
 )
 
@@ -26,6 +26,8 @@ func main() {
 	ahkPortFlag := flag.Int("ahk-port", 0, "Override AutoHotkey listener port")
 	tokenFile := flag.String("token-file", "token.txt", "Path to file for persisting active token")
 	hideFlag := flag.Bool("hide-console", false, "Hide server console window on Windows")
+	netModeFlag := flag.String("net-mode", "", "Override network interface mode (auto, usb, lan)")
+	serverIPFlag := flag.String("server-ip", "", "Override server IP for pairing QR and base URL")
 	flag.Parse()
 
 	initConsole()
@@ -52,6 +54,12 @@ func main() {
 	}
 	if *hideFlag {
 		appCfg.HideConsole = true
+	}
+	if *netModeFlag != "" {
+		appCfg.NetworkMode = *netModeFlag
+	}
+	if *serverIPFlag != "" {
+		appCfg.ServerIP = *serverIPFlag
 	}
 
 	tokenMgr := auth.NewTokenManager(*tokenFile, appCfg.TokenTTL)
@@ -101,25 +109,71 @@ func main() {
 		ShutdownFunc:     shutdownFunc,
 	})
 
-	localIP := getOutboundIP()
-	if localIP == "" {
-		localIP = "127.0.0.1"
+	selectedIface, err := netutil.ResolveServerIP(appCfg.NetworkMode, appCfg.ServerIP)
+	if err != nil {
+		log.Printf("Warning: failed to resolve server IP (%v), using loopback fallback", err)
 	}
-	serverURL := fmt.Sprintf("http://%s:%d", localIP, appCfg.Port)
+	serverURL := netutil.FormatServerURL(selectedIface.IP, appCfg.Port)
 	tokenMgr.SetBaseURL(serverURL)
+
+	// Dynamically resolve server URL on demand for /qr, /pair, and /qr.png
+	tokenMgr.SetURLResolver(func() string {
+		iface, _ := netutil.ResolveServerIP(appCfg.NetworkMode, appCfg.ServerIP)
+		return netutil.FormatServerURL(iface.IP, appCfg.Port)
+	})
 
 	log.Printf("Active Token: %.8s... (full token only via /pair on LAN)", token)
 	log.Printf("Token TTL:    %v (auto-refreshes)", appCfg.TokenTTL)
 	log.Printf("Timestamp skew window: ±%v", appCfg.MaxSkew)
 	log.Printf("Rate limit:   %d req / %v per IP on POST /isbn", appCfg.RateLimitMax, appCfg.RateLimitWindow)
 	log.Printf("Replay cache: %d signatures / %v TTL", appCfg.ReplaySize, appCfg.ReplayTTL)
+	log.Printf("Network mode: %s (interface: %s, IP: %s, type: %s)",
+		appCfg.NetworkMode, selectedIface.Name, selectedIface.IP, selectedIface.Type)
 	log.Printf("Listening on: http://0.0.0.0:%d", appCfg.Port)
-	log.Printf("  -> Mobile Pairing URL: %s/pair?token=%s", serverURL, token)
+	log.Printf("  -> Mobile Pairing URL: %s/pair?token=%.8s... (scan QR to pair)", serverURL, token)
 	log.Printf("  -> Browser QR page:    %s/qr", serverURL)
 	log.Printf("  -> ISBN Post URL:      %s/isbn", serverURL)
 	log.Printf("Forwarding to AutoHotkey at: %s", ahkTarget)
 	log.Println("--------------------------------------------------")
 	log.Println("Pairing QR is shown as a desktop popup and at /qr in a browser.")
+
+	// Background interface monitor for dynamic USB hot-plug / unplug detection
+	go func() {
+		lastIP := selectedIface.IP
+		lastType := selectedIface.Type
+		ifaceTicker := time.NewTicker(2 * time.Second)
+		defer ifaceTicker.Stop()
+
+		for {
+			select {
+			case <-ifaceTicker.C:
+				currentIface, err := netutil.ResolveServerIP(appCfg.NetworkMode, appCfg.ServerIP)
+				if err != nil {
+					continue
+				}
+
+				if currentIface.IP != lastIP {
+					log.Println("--------------------------------------------------")
+					log.Printf("🔌 Network interface changed: %s (%s) -> %s (%s)",
+						lastIP, lastType, currentIface.IP, currentIface.Type)
+					lastIP = currentIface.IP
+					lastType = currentIface.Type
+					newURL := netutil.FormatServerURL(currentIface.IP, appCfg.Port)
+					tokenMgr.SetBaseURL(newURL)
+					log.Printf("  -> Updated Mobile Pairing URL: %s/pair?token=%.8s... (scan QR to pair)", newURL, tokenMgr.CurrentToken())
+					log.Printf("  -> Updated Browser QR page:    %s/qr", newURL)
+					log.Printf("  -> Updated ISBN Post URL:      %s/isbn", newURL)
+					log.Println("--------------------------------------------------")
+
+					if appCfg.QRAutoShowOnRefresh {
+						_ = forwarder.ShowQR(context.Background())
+					}
+				}
+			case <-shutdownChan:
+				return
+			}
+		}
+	}()
 
 	// Trigger seamless centered QR popup in AutoHotkey on startup
 	if appCfg.QRAutoShowOnRefresh {
@@ -222,34 +276,4 @@ func isAddrInUse(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "address already in use") ||
 		strings.Contains(msg, "Only one usage of each socket address")
-}
-
-func getOutboundIP() string {
-	conn, err := net.DialTimeout("udp", "8.8.8.8:80", 500*time.Millisecond)
-	if err == nil {
-		defer conn.Close()
-		return conn.LocalAddr().(*net.UDPAddr).IP.String()
-	}
-
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return ""
-	}
-	for _, iface := range ifaces {
-		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
-			continue
-		}
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-		for _, addr := range addrs {
-			if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
-				if ip4 := ipNet.IP.To4(); ip4 != nil {
-					return ip4.String()
-				}
-			}
-		}
-	}
-	return ""
 }

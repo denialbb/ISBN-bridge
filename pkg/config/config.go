@@ -21,6 +21,8 @@ type Config struct {
 	TokenTTL    time.Duration // Token lifespan before auto-rotation (default: 60m)
 	MaxSkew     time.Duration // Allowed clock drift for request timestamps (default: 15s)
 	HideConsole bool          // Hide console window on Windows (default: true)
+	NetworkMode string        // Network interface preference: "auto", "usb", "lan" (default: "auto")
+	ServerIP    string        // Explicit IP override to advertise in pairing QR code (default: "")
 
 	// LAN hardening (see docs/SECURITY.md)
 	RateLimitMax    int           // Max POST /isbn requests per window per IP, <=0 disables (default: 2)
@@ -56,6 +58,8 @@ func Default() *Config {
 		TokenTTL:              60 * time.Minute,
 		MaxSkew:               15 * time.Second,
 		HideConsole:           true,
+		NetworkMode:           "auto",
+		ServerIP:              "",
 		RateLimitMax:          2,
 		RateLimitWindow:       10 * time.Second,
 		ReplaySize:            100,
@@ -152,6 +156,13 @@ func LoadOrCreate(path string) (*Config, error) {
 			}
 		case "hide_console":
 			cfg.HideConsole = parseBool(val, true)
+		case "network_mode":
+			mode := strings.ToLower(strings.TrimSpace(val))
+			if mode == "auto" || mode == "usb" || mode == "lan" {
+				cfg.NetworkMode = mode
+			}
+		case "server_ip":
+			cfg.ServerIP = strings.TrimSpace(val)
 		case "target_tab_title":
 			cfg.TargetTabTitle = val
 		case "overwrite_existing_text":
@@ -253,6 +264,12 @@ replay_ttl_seconds = %d
 # Hide the server console window on Windows (true: background mode, false: visible console)
 hide_console = %t
 
+# Network interface mode for mobile pairing: auto (prefer USB cable if connected, fallback to LAN), usb (force USB tethering), lan (force Wi-Fi/LAN)
+network_mode = %s
+
+# Optional explicit IP or hostname to advertise in the pairing QR code (overrides auto-detection)
+server_ip = %s
+
 
 [AutoPaste]
 # Window or browser tab title required for auto-paste (leave empty to paste into any active window)
@@ -299,6 +316,8 @@ language = %s
 		c.ReplaySize,
 		int(c.ReplayTTL.Seconds()),
 		c.HideConsole,
+		c.NetworkMode,
+		c.ServerIP,
 		c.TargetTabTitle,
 		c.OverwriteExistingText,
 		c.AutoPasteOnHover,

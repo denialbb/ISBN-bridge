@@ -68,14 +68,21 @@ Scanning from an iPhone uses two Apple Shortcuts. No third-party App Store apps 
 
 ## 2. Setting Up the iPhone
 
-1. **Network Connection**:
-   - Ensure the iPhone is connected to the same local Wi-Fi network as your PC.
-2. **One-Tap Pairing**:
-   - Start the Go server and AutoHotkey client on your PC.
-   - Point your iPhone's camera at the centered QR code on your monitor.
-   - Tap the link, then tap **Open in Shortcuts** to save the configuration automatically.
-3. **Scan Books**:
-   - Run the **Scanner Shortcut**. The camera opens in a loop. Point it at any book barcode; the ISBN is checked and pasted on your PC.
+### Option A: Direct USB Cable (Recommended for lowest latency & isolated networks)
+1. Connect your iPhone to your PC (Windows or Linux) with a Lightning or USB-C cable.
+2. On your iPhone: go to **Settings > Personal Hotspot** and turn it **ON** (select *"USB Only"* when prompted).
+   - *Note: Cellular data can be disabled if desired; iPhone and PC communicate over the cable via local `172.20.10.x` without needing internet.*
+3. ISBN Bridge automatically detects the USB connection, switches the pairing address to the cable interface, and updates the desktop QR code popup.
+4. Point your iPhone camera at the centered QR code to pair over the cable.
+
+### Option B: Local Wi-Fi
+1. Ensure the iPhone is connected to the same local Wi-Fi network as your PC.
+2. Start the Go server and desktop client on your PC.
+3. Point your iPhone camera at the centered QR code on your monitor.
+4. Tap the link, then tap **Open in Shortcuts** to save the configuration automatically.
+
+### Scanning:
+Run the **Scanner Shortcut**. The camera opens in a loop. Point it at any book barcode; the ISBN is signed and pasted to your PC.
 
 ---
 

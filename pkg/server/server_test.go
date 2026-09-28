@@ -312,6 +312,18 @@ func TestPairEndpoint(t *testing.T) {
 	if recToken.Code != http.StatusOK {
 		t.Errorf("expected 200 with valid token, got %d", recToken.Code)
 	}
+	if !strings.Contains(recToken.Body.String(), `"interface_type"`) {
+		t.Errorf("expected JSON to contain interface_type: %s", recToken.Body.String())
+	}
+
+	// 3b. USB interface detection in pairing payload
+	tokenMgr.SetBaseURL("http://172.20.10.2:8765")
+	reqUSB := httptest.NewRequest("GET", "/pair?format=json&token="+token, nil)
+	recUSB := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recUSB, reqUSB)
+	if !strings.Contains(recUSB.Body.String(), `"interface_type":"usb_ios"`) {
+		t.Errorf("expected interface_type usb_ios, got %s", recUSB.Body.String())
+	}
 
 	// 4. iOS HTML response with valid token
 	reqIOS := httptest.NewRequest("GET", "/pair?token="+token, nil)

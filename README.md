@@ -16,18 +16,19 @@
 ## How It Works
 
 ```
-[Phone Camera Scanner]
-        │  (Wi-Fi LAN)
+[Phone Camera Scanner (iPhone / Android)]
+        │  (USB Cable Tethering or Wi-Fi LAN)
         │  HTTP POST /isbn
         │  Authorization: Bearer SHA256(ISBN|Timestamp|Token)
         ▼
 [Go Backend Server (:8765)]
+   - Auto-detects USB cable vs Wi-Fi LAN
    - Authenticates SHA-256 signature
    - Validates ISBN-10 / ISBN-13 checksum
         │  (Localhost)
         │  HTTP POST /paste
         ▼
-[AutoHotkey Desktop Client (:8766)]
+[Desktop Client (:8766) - Windows AHK / Linux Python]
    - Hover paste into active textbox
    - Centered QR pairing popup
    - Audio tap feedback & tray controls
@@ -37,6 +38,7 @@
 
 ## Features
 
+- **USB Cable & Wi-Fi Comms**: Plug iPhone/Android into PC USB cable with tethering for low-latency offline scanning, or scan over standard local Wi-Fi. Hot-plugging dynamically updates the pairing QR code.
 - **Desktop Pairing**: A centered QR code pops up on your monitor when the security token rotates. Scan it with your phone to pair.
 - **Hover Paste**: If your mouse is over a text field in your target window (e.g. Hardcover), the ISBN pastes without a click.
 - **Unified Configuration**: All ports, timings, and behaviors are customized through a single file: [`scanner.conf`](scanner.conf).

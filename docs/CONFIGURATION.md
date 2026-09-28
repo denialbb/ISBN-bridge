@@ -33,6 +33,15 @@ rate_limit_window_seconds = 10
 replay_cache_size = 100
 replay_ttl_seconds = 60
 
+# Network interface mode for mobile pairing:
+# - auto: automatically prefer USB tethering if plugged in (iOS 172.20.10.x, Android 192.168.42.x); fallback to Wi-Fi/LAN.
+# - usb:  exclusively bind/advertise USB tethering interface.
+# - lan:  exclusively bind/advertise Wi-Fi or LAN interface.
+network_mode = auto
+
+# Optional explicit IP override to advertise in the pairing QR code (leave empty for auto-detection).
+server_ip =
+
 [AutoPaste]
 # Window/tab title substring required for auto-paste actions (case-insensitive)
 target_tab_title = hardcover

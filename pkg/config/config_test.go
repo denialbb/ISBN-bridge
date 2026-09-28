@@ -157,3 +157,45 @@ replay_ttl_seconds = 120
 		t.Errorf("expected reloaded replay 50/120s, got %d/%v", reloaded.ReplaySize, reloaded.ReplayTTL)
 	}
 }
+
+func TestNetworkKeys(t *testing.T) {
+	tempDir := t.TempDir()
+	confPath := filepath.Join(tempDir, "scanner.conf")
+
+	content := `
+[Server]
+network_mode = usb
+server_ip = 172.20.10.5
+`
+	if err := os.WriteFile(confPath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := LoadOrCreate(confPath)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	if cfg.NetworkMode != "usb" {
+		t.Errorf("expected NetworkMode 'usb', got %q", cfg.NetworkMode)
+	}
+	if cfg.ServerIP != "172.20.10.5" {
+		t.Errorf("expected ServerIP '172.20.10.5', got %q", cfg.ServerIP)
+	}
+
+	// Round-trip through Save
+	if err := cfg.Save(confPath); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+	reloaded, err := LoadOrCreate(confPath)
+	if err != nil {
+		t.Fatalf("failed to reload config: %v", err)
+	}
+	if reloaded.NetworkMode != "usb" {
+		t.Errorf("expected reloaded NetworkMode 'usb', got %q", reloaded.NetworkMode)
+	}
+	if reloaded.ServerIP != "172.20.10.5" {
+		t.Errorf("expected reloaded ServerIP '172.20.10.5', got %q", reloaded.ServerIP)
+	}
+}
+
