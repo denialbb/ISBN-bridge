@@ -39,6 +39,10 @@ class SoundManager:
 
     @classmethod
     def play_sound_file(cls, name: str) -> None:
+        import os
+        if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("CI") or os.getenv("ISBN_BRIDGE_NO_SOUND"):
+            return
+
         sound_path = cls.find_sound_file(name)
         if not sound_path:
             Logger.log(f"Sound file not found: {name}")

@@ -13,6 +13,10 @@ class Notifier:
         title = title or I18n.get("app_title")
         Logger.log(f"Notification: [{title}] {message}")
 
+        import os
+        if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("CI") or os.getenv("ISBN_BRIDGE_NO_NOTIFY"):
+            return
+
         notify_cmd = shutil.which("notify-send")
         if notify_cmd:
             try:

@@ -31,9 +31,15 @@ def run_e2e_live_test():
     secret_file = repo_root / "local_secret.txt"
 
     print("\n1. Starting Linux client via uv...")
+    test_env = os.environ.copy()
+    test_env["ISBN_BRIDGE_NO_NOTIFY"] = "1"
+    test_env["ISBN_BRIDGE_NO_SOUND"] = "1"
+    test_env["ISBN_BRIDGE_NO_TYPING"] = "1"
+
     client_proc = subprocess.Popen(
         ["uv", "run", "client-linux"],
         cwd=str(client_dir),
+        env=test_env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
