@@ -38,3 +38,17 @@ def test_matches_target():
     # Empty target matches any window
     config.target_tab_title = ""
     assert engine.matches_target("Random Window", "kitty") is True
+
+
+def test_focus_event_deferred_paste_no_deadlock():
+    config = AppConfig()
+    config.auto_paste_on_hover = False
+    config.target_tab_title = ""
+    engine = PasteEngine(config)
+    engine.arm("9780306406157")
+    assert engine.pending_isbn == "9780306406157"
+
+    # Simulate window focus event; must not deadlock and must clear pending ISBN
+    engine._on_window_focus_event("activewindow>>kitty,sky:ISBN-bridge")
+    assert engine.pending_isbn is None
+

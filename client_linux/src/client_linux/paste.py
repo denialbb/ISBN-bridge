@@ -23,7 +23,7 @@ class PasteEngine:
         self.config = config
         self.enabled: bool = True
         self.pending_isbn: Optional[str] = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._focus_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._start_focus_watcher()
@@ -197,6 +197,10 @@ class PasteEngine:
             Logger.log(f"PasteNow error: {e}")
 
     def _inject_keystrokes(self, text: str) -> None:
+        if os.environ.get("ISBN_BRIDGE_NO_TYPING") or os.environ.get("PYTEST_CURRENT_TEST"):
+            Logger.log(f"PasteEngine: keystroke injection silenced for test: {text}")
+            return
+
         # Determine injection strategy
         if self.is_wayland and shutil.which("wtype"):
             self._inject_wayland(text)
@@ -205,37 +209,64 @@ class PasteEngine:
         else:
             Logger.log("Error: Neither wtype nor xdotool found for keystroke injection")
 
-    def _inject_wayland(self, text: str) -> None:
-        # 1. Select all if configured
-        if self.config.overwrite_existing_text:
-            subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-m", "ctrl"], check=False)
-            time.sleep(0.03)
+    def _is_terminal(self) -> bool:
+        terminals = [
+            "kitty", "alacritty", "foot", "wezterm", "terminal",
+            "xterm", "ghostty", "urxvt", "st", "terminator", "tilix", "konsole"
+        ]
+        if self.is_hyprland:
+            active = self.get_hyprland_active_window()
+            if active:
+                wclass = (active.get("class") or "").lower()
+                title = (active.get("title") or "").lower()
+                return any(t in wclass or t in title for t in terminals)
+        elif shutil.which("xdotool"):
+            try:
+                win_id = subprocess.check_output(["xdotool", "getactivewindow"], text=True, timeout=0.5).strip()
+                if win_id:
+                    name = subprocess.check_output(["xdotool", "getwindowname", win_id], text=True, timeout=0.5).lower()
+                    return any(t in name for t in terminals)
+            except Exception:
+                pass
+        return False
 
-        # 2. Copy to clipboard and paste with Ctrl+V if wl-copy is present
+    def _inject_wayland(self, text: str) -> None:
+        # 1. Populate both standard clipboard and primary selection for manual paste
         if shutil.which("wl-copy"):
-            p = subprocess.Popen(["wl-copy"], stdin=subprocess.PIPE)
-            p.communicate(input=text.encode("utf-8"))
-            time.sleep(0.03)
-            subprocess.run(["wtype", "-M", "ctrl", "-k", "v", "-m", "ctrl"], check=False)
-        else:
-            # Type directly
-            subprocess.run(["wtype", "--", text], check=False)
+            try:
+                subprocess.run(["wl-copy", text], check=False)
+                subprocess.run(["wl-copy", "--primary", text], check=False)
+            except Exception as e:
+                Logger.log(f"wl-copy failed: {e}")
+
+        is_term = self._is_terminal()
+
+        # 2. Select all if configured and not a terminal (Ctrl+A in terminal is beginning-of-line)
+        if self.config.overwrite_existing_text and not is_term:
+            subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-m", "ctrl"], check=False)
+            time.sleep(0.04)
+
+        # 3. Direct keystroke typing works universally across terminals, browsers, and textboxes
+        subprocess.run(["wtype", "-d", "3", "--", text], check=False)
 
     def _inject_x11(self, text: str) -> None:
-        # 1. Select all if configured
-        if self.config.overwrite_existing_text:
-            subprocess.run(["xdotool", "key", "ctrl+a"], check=False)
-            time.sleep(0.03)
-
-        # 2. Copy to clipboard and paste with Ctrl+V if xclip is present
+        # 1. Populate both standard clipboard and primary selection for manual paste
         if shutil.which("xclip"):
-            p = subprocess.Popen(["xclip", "-selection", "clipboard"], stdin=subprocess.PIPE)
-            p.communicate(input=text.encode("utf-8"))
-            time.sleep(0.03)
-            subprocess.run(["xdotool", "key", "ctrl+v"], check=False)
-        else:
-            # Type directly
-            subprocess.run(["xdotool", "type", "--", text], check=False)
+            try:
+                subprocess.run(["xclip", "-selection", "clipboard"], input=text.encode("utf-8"), check=False)
+                subprocess.run(["xclip", "-selection", "primary"], input=text.encode("utf-8"), check=False)
+            except Exception as e:
+                Logger.log(f"xclip failed: {e}")
+
+        is_term = self._is_terminal()
+
+        # 2. Select all if configured and not a terminal
+        if self.config.overwrite_existing_text and not is_term:
+            subprocess.run(["xdotool", "key", "ctrl+a"], check=False)
+            time.sleep(0.04)
+
+        # 3. Type directly
+        subprocess.run(["xdotool", "type", "--", text], check=False)
 
     def _start_focus_watcher(self) -> None:
         """Background watcher that fires deferred paste when user focuses the target window."""
@@ -303,9 +334,12 @@ class PasteEngine:
         if self.matches_target(wtitle, wclass):
             Logger.log(f"Focus watcher: target window focused ({wtitle}), triggering deferred paste")
             time.sleep(0.12)  # Give window time to process click/focus
+            should_paste = False
             with self._lock:
                 if self.pending_isbn == isbn:
-                    self.paste_now(isbn, auto_focus_with_click=False)
+                    should_paste = True
+            if should_paste:
+                self.paste_now(isbn, auto_focus_with_click=False)
 
     def shutdown(self) -> None:
         self._stop_event.set()

@@ -1,8 +1,10 @@
 """Centered borderless QR modal popup for desktop pairing."""
 
 import io
+import json
 import os
 from pathlib import Path
+import subprocess
 import tempfile
 import threading
 import time
@@ -73,21 +75,36 @@ class QRModal:
         return None
 
     @classmethod
+    def _get_active_screen_geometry(cls, win: tk.Toplevel) -> tuple[int, int, int, int]:
+        """Return (offset_x, offset_y, width, height) of current monitor."""
+        if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+            try:
+                out = subprocess.check_output(["hyprctl", "monitors", "-j"], timeout=0.5)
+                monitors = json.loads(out)
+                for m in monitors:
+                    if m.get("focused"):
+                        return (
+                            int(m.get("x", 0)),
+                            int(m.get("y", 0)),
+                            int(m.get("width", 1366)),
+                            int(m.get("height", 768)),
+                        )
+            except Exception:
+                pass
+        return (0, 0, win.winfo_screenwidth(), win.winfo_screenheight())
+
+    @classmethod
     def _show_internal(cls, config: AppConfig) -> None:
         with cls._lock:
             if cls._window is not None:
                 try:
-                    cls._window.lift()
-                    cls._window.focus_force()
-                    if config.qr_auto_hide_seconds > 0:
-                        if cls._auto_hide_timer_id:
-                            cls._window.after_cancel(cls._auto_hide_timer_id)
-                        cls._auto_hide_timer_id = cls._window.after(
-                            config.qr_auto_hide_seconds * 1000, cls.hide
-                        )
-                    return
+                    if cls._auto_hide_timer_id:
+                        cls._window.after_cancel(cls._auto_hide_timer_id)
+                        cls._auto_hide_timer_id = None
+                    cls._window.destroy()
                 except Exception:
-                    cls._window = None
+                    pass
+                cls._window = None
 
             # Fetch QR directly from local Go backend in memory
             orig_qr = cls._fetch_qr_image(config.go_server_url)
@@ -99,7 +116,8 @@ class QRModal:
             win = tk.Toplevel(root)
             cls._window = win
 
-            # Borderless, floating, on-top window
+            # Keep withdrawn until geometry is fully computed to avoid top-left XWayland map bug
+            win.withdraw()
             win.overrideredirect(True)
             win.attributes("-topmost", True)
             win.configure(bg="#FFFFFF", padx=16, pady=6)
@@ -150,18 +168,20 @@ class QRModal:
             win.bind("<Button-1>", lambda e: cls.hide())
             win.bind("<Escape>", lambda e: cls.hide())
 
-            # Position in screen center
+            # Position in exact screen center
             win.update_idletasks()
             win_w = win.winfo_reqwidth()
             win_h = win.winfo_reqheight()
-            screen_w = win.winfo_screenwidth()
-            screen_h = win.winfo_screenheight()
-            pos_x = (screen_w - win_w) // 2
-            pos_y = (screen_h - win_h) // 2
+            mon_x, mon_y, screen_w, screen_h = cls._get_active_screen_geometry(win)
+            pos_x = mon_x + (screen_w - win_w) // 2
+            pos_y = mon_y + (screen_h - win_h) // 2
             win.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
 
+            # Reveal centered
+            win.deiconify()
             win.lift()
             win.focus_force()
+            win.update()
             Logger.log(f"QRModal shown at center ({pos_x}, {pos_y})")
 
             # Auto-hide timer

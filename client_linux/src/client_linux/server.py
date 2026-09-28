@@ -169,6 +169,8 @@ class HttpListenerServer(HTTPServer):
 
 
 class HttpListener:
+    find_secret_file = staticmethod(HttpListenerServer.find_secret_file)
+
     def __init__(self, config: AppConfig, paste_engine: PasteEngine, secret_file_path: Optional[str] = None):
         self.config = config
         self.paste_engine = paste_engine
