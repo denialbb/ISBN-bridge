@@ -12,6 +12,7 @@ from client_linux.config import AppConfig
 from client_linux.isbn import validate, ISBNValidationError
 from client_linux.logger import Logger
 from client_linux.paste import PasteEngine
+from client_linux.server_manager import ServerManager
 from client_linux.ui_qr import QRModal
 
 
@@ -19,8 +20,9 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
     server: "HttpListenerServer"
 
     def log_message(self, format: str, *args) -> None:
-        # Route access logs to our Logger instead of stderr
-        Logger.log(f"HTTP {self.command} {self.path} - {format % args}")
+        # Route access logs to our Logger instead of stderr; strip query strings to prevent leakage
+        clean_path = self.path.split("?")[0]
+        Logger.log(f"HTTP {self.command} {clean_path} - {format % args}")
 
     def send_plain_response(self, status_code: int, message: str) -> None:
         data = message.encode("utf-8")
@@ -41,7 +43,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def check_local_secret(self) -> bool:
-        secret_file = self.server.secret_file_path or self.server.find_secret_file()
+        secret_file = self.server.secret_file_path or self.server.find_secret_file(self.server.config)
         if not secret_file or not os.path.isfile(secret_file):
             if not self.server.secret_warned:
                 self.server.secret_warned = True
@@ -89,7 +91,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
                 self.server.paste_engine.arm(body)
                 self.send_plain_response(200, "OK")
             except ISBNValidationError as e:
-                Logger.log(f"Rejected invalid ISBN '{body}': {e}")
+                Logger.log(f"Rejected invalid ISBN: {e}")
                 self.send_plain_response(400, f"Invalid ISBN: {e}")
             except Exception as e:
                 Logger.log(f"Error processing ISBN: {e}")
@@ -98,6 +100,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
 
         elif path == "/qr/show":
             try:
+                ServerManager.start_or_attach(self.server.config)
                 QRModal.show(self.server.config)
                 self.send_plain_response(200, "QR shown")
             except Exception as e:
@@ -151,15 +154,39 @@ class HttpListenerServer(HTTPServer):
         super().__init__(server_address, RequestHandlerClass)
         self.config = config
         self.paste_engine = paste_engine
-        self.secret_file_path = secret_file_path or self.find_secret_file()
+        self.secret_file_path = secret_file_path or self.find_secret_file(config)
         self.secret_warned = False
 
     @staticmethod
-    def find_secret_file() -> Optional[str]:
+    def find_secret_file(config: Optional[AppConfig] = None) -> Optional[str]:
+        # 1. Next to current config file if known
+        if config and config.file_path:
+            p = Path(config.file_path).resolve().parent / "local_secret.txt"
+            if p.is_file():
+                return str(p.resolve())
+
+        # 2. In XDG config directory
+        xdg_config_home = os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))
+        xdg_secret = Path(xdg_config_home) / "isbn-bridge" / "local_secret.txt"
+        if xdg_secret.is_file():
+            return str(xdg_secret.resolve())
+
+        # 3. Next to detected config file
+        try:
+            conf_found = AppConfig.find_config_file()
+            if conf_found:
+                p = Path(conf_found).resolve().parent / "local_secret.txt"
+                if p.is_file():
+                    return str(p.resolve())
+        except Exception:
+            pass
+
+        # 4. In repo root or current directory
+        repo_root = Path(__file__).resolve().parent.parent.parent.parent
         candidates = [
             Path("local_secret.txt"),
-            Path(__file__).resolve().parent.parent.parent.parent / "local_secret.txt",
             Path.cwd() / "local_secret.txt",
+            repo_root / "local_secret.txt",
             Path.cwd().parent / "local_secret.txt",
         ]
         for c in candidates:

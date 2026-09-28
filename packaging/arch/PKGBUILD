@@ -1,0 +1,51 @@
+# Maintainer: Daniel Biasiotto <mail@denial.in.net>
+pkgname=isbn-bridge
+pkgver=1.1.0
+pkgrel=1
+pkgdesc="Bridge mobile barcode scanning directly to PC input fields"
+arch=('x86_64')
+url="https://github.com/denialbb/ISBN-bridge"
+license=('MIT')
+depends=('python' 'python-pillow' 'python-gobject' 'libayatana-appindicator')
+optdepends=(
+    'wtype: keystroke injection on Wayland'
+    'xdotool: keystroke injection on X11'
+    'wl-clipboard: clipboard management on Wayland'
+    'xclip: clipboard management on X11'
+)
+makedepends=('go' 'python-build' 'python-installer' 'python-wheel' 'uv')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cd "ISBN-bridge-$pkgver"
+    export CGO_CPPFLAGS="${CPPFLAGS}"
+    export CGO_CFLAGS="${CFLAGS}"
+    export CGO_CXXFLAGS="${CXXFLAGS}"
+    export CGO_LDFLAGS="${LDFLAGS}"
+    export GOFLAGS="-buildmode=pie -trimpath -ldflags=-linkmode=external -mod=readonly -modcacherw"
+
+    go build -o bin/isbn-bridge-server ./cmd/server
+
+    cd client_linux
+    uv build --wheel --no-build-isolation
+}
+
+package() {
+    cd "ISBN-bridge-$pkgver"
+
+    # Install Go server binary
+    install -Dm755 bin/isbn-bridge-server "$pkgdir/usr/bin/isbn-bridge-server"
+
+    # Install Python package
+    cd client_linux
+    python -m installer --destdir="$pkgdir" dist/*.whl
+    cd ..
+
+    # Install desktop launcher, service, and icons
+    install -Dm644 packaging/linux/isbn-bridge.desktop "$pkgdir/usr/share/applications/isbn-bridge.desktop"
+    install -Dm644 packaging/linux/isbn-bridge.service "$pkgdir/usr/lib/systemd/user/isbn-bridge.service"
+    install -Dm644 client_linux/src/client_linux/assets/tray.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/isbn-bridge.png"
+    install -Dm644 client_linux/src/client_linux/assets/isbn-bridge-symbolic.png "$pkgdir/usr/share/icons/hicolor/symbolic/apps/isbn-bridge-symbolic.png"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

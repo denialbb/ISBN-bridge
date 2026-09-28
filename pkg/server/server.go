@@ -185,7 +185,7 @@ func (s *Server) handlePostISBN(w http.ResponseWriter, r *http.Request) {
 	// 1. Validate ISBN format & checksum
 	normalizedISBN, err := isbn.Validate(rawISBN)
 	if err != nil {
-		log.Printf("Invalid ISBN rejected: %q (%v)", rawISBN, err)
+		log.Printf("Invalid ISBN rejected: %v", err)
 		http.Error(w, "Invalid ISBN: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -223,10 +223,10 @@ func (s *Server) handlePostISBN(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Authenticated valid ISBN: %s (Client: %s)", normalizedISBN, r.RemoteAddr)
 
-	// 4. Forward to AutoHotkey
+	// 4. Forward to desktop client
 	if s.forwarder != nil {
 		if err := s.forwarder.Forward(r.Context(), normalizedISBN); err != nil {
-			log.Printf("Forwarding to AutoHotkey failed: %v", err)
+			log.Printf("Forwarding to desktop client failed: %v", err)
 			http.Error(w, "Desktop client error: "+err.Error(), http.StatusBadGateway)
 			return
 		}
@@ -287,7 +287,7 @@ func (s *Server) handleGetQRPNG(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleShowQR(w http.ResponseWriter, r *http.Request) {
 	if s.forwarder != nil {
 		if err := s.forwarder.ShowQR(r.Context()); err != nil {
-			log.Printf("Notice: AutoHotkey ShowQR call failed: %v", err)
+			log.Printf("Notice: Desktop client ShowQR call failed: %v", err)
 		}
 	}
 
@@ -365,7 +365,7 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Token refreshed (prefix %.8s...)", newToken)
+	log.Println("Token refreshed")
 
 	if s.forwarder != nil {
 		go func() {
@@ -411,7 +411,7 @@ func (s *Server) handleSetTTL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Token TTL updated to %d minutes (prefix %.8s...)", mins, newToken)
+	log.Printf("Token TTL updated to %d minutes", mins)
 
 	if s.forwarder != nil {
 		go func() {

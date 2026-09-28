@@ -23,7 +23,9 @@ class I18n:
 
     @classmethod
     def find_lang_dir(cls) -> Path:
+        pkg_lang = Path(__file__).resolve().parent / "lang"
         candidates = [
+            pkg_lang,
             Path("client/lang"),
             Path(__file__).resolve().parent.parent.parent.parent / "client" / "lang",
             Path.cwd() / "client" / "lang",

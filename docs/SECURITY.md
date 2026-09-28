@@ -94,16 +94,17 @@ The hash comparison itself runs in constant time for equal-length inputs; it doe
 
 ---
 
-## 4. LAN Hardening (plain HTTP)
+## 4. LAN & Physical Link Hardening
 
-HTTPS is not implemented; opt-in TLS is tracked in
-[#1](https://github.com/denialbb/ISBN-bridge/issues/1). Until then, on a
-trusted, password-protected Wi-Fi network the remaining risk is mainly
-paste spam. On open or shared Wi-Fi, assume traffic (including ISBNs and
-the pairing token) can be read; prefer a private network. The measures
-below limit what a LAN observer can do in the meantime:
+### 4.0 Physical USB Link Isolation (Recommended)
 
-### 4.1 Tight Timestamp Window (±15 seconds)
+When connected via direct USB cable tethering (`172.20.10.x` for iPhone, `192.168.4x.x` for Android), communication is physically bounded to the point-to-point USB cable interface. It completely bypasses the local Wi-Fi router and network infrastructure, eliminating wireless eavesdropping, unauthorized LAN injections, and Wi-Fi packet sniffing risks without requiring custom certificates.
+
+### 4.1 Plain HTTP on Trusted LANs
+
+When operating over Wi-Fi, HTTPS is not enabled by default; opt-in TLS is tracked in [#1](https://github.com/denialbb/ISBN-bridge/issues/1). On open or shared Wi-Fi networks, users should prefer direct USB cable tethering. When on Wi-Fi, the following defense-in-depth measures protect the session:
+
+### 4.2 Tight Timestamp Window (±15 seconds)
 
 `max_timestamp_skew_seconds` (default: `15`). A request whose `Timestamp`
 header is missing, unparseable, or outside the window is rejected with
@@ -112,42 +113,43 @@ header is missing, unparseable, or outside the window is rejected with
 absent. Both the phone and the PC are normally NTP-synced to within a
 second, so the tight default is safe; raise it if you see false `401`s.
 
-### 4.2 Single-Use Signatures (Replay Protection)
+### 4.3 Single-Use Signatures (Replay Protection)
 
 The server remembers the last `replay_cache_size` (default: `100`) accepted
 signatures for `replay_ttl_seconds` (default: `60`). Replaying a captured
 request returns `409 Conflict` and never reaches the desktop. Purely
 in-memory; no persistent storage.
 
-### 4.3 Per-IP Rate Limiting
+### 4.4 Per-IP Rate Limiting
 
 `POST /isbn` is limited to `rate_limit_max_requests` (default: `2`) per
 `rate_limit_window_seconds` (default: `10`) sliding window per source IP.
 Excess requests get `429 Too Many Requests`. Tune to taste: `0` disables the
 limiter. Health, QR, and pairing endpoints are not limited.
 
-### 4.4 Focus and Window Checks (Desktop Client)
+### 4.5 Focus and Window Checks (Desktop Clients)
 
-The AutoHotkey `PasteEngine` only emits keystrokes when the focused window
-matches `target_tab_title` **and** the cursor is an IBeam (text field). The
-check runs three times: at click time, 100 ms later in `OnDeferredClick`,
-and immediately before `SendInput` in `PasteNow` — so a window switch in the
-arming gap aborts the paste instead of mistyping into the wrong app.
+- **Windows (AutoHotkey)**: The `PasteEngine` only emits keystrokes when the focused window matches `target_tab_title` **and** the cursor is an IBeam (text field). The check runs three times: at click time, 100 ms later in `OnDeferredClick`, and immediately before `SendInput` in `PasteNow` — so a window switch in the arming gap aborts the paste.
+- **Linux (Python)**: Active window titles are verified before typing via Hyprland IPC (`hyprctl activewindow -j`), Sway IPC, or `xdotool getactivewindow`. If the focused window does not match `target_tab_title`, keystroke injection is aborted.
 
-### 4.5 Local Control Plane
+### 4.6 Local Control Plane & Zero Log Leakage
 
 The endpoints the desktop client drives (`/token/refresh`, `/token/ttl`,
 `/shutdown`, `/console/*`, `/qr/show`) accept loopback requests only
 (`127.0.0.1`, `::1`); LAN callers get `403`. The phone only needs `/isbn`,
-`/qr*`, `/pair`, and `/health`, which stay LAN-reachable.
+`/qr*`, `/pair`, and `/health`, which stay reachable over LAN or USB tether.
 
-The hop from Go to AutoHotkey (`127.0.0.1:8766`, bound to localhost) needs
-a second credential: the server generates a 32-character secret at startup,
-stores it in `local_secret.txt` (`0600`) next to the token file, and sends
-it as `X-ISBN-Bridge-Local` on every forward. The client re-reads the file
-per request, so server restarts need no client restart. The pairing QR PNG
-is deleted from `%TEMP%` as soon as the popup loads it, and server logs
-only print token prefixes, never full tokens.
+The hop from Go to the desktop client (`127.0.0.1:8766`, bound to localhost) requires
+a separate credential: the server generates a 32-character cryptographically secure
+secret at startup, stores it in `local_secret.txt` (`0600`) next to the token file, and
+sends it as `X-ISBN-Bridge-Local` on every forward. The client re-reads the file
+per request, allowing seamless server restarts.
+
+**Zero Log Leakage Policy**:
+- Server standard output and debug logs never output secret tokens, token prefixes, or pairing URLs with sensitive parameters.
+- Client HTTP access logs strip query parameters so secrets are never written to `isbn-bridge-debug.log`.
+- Invalid request payloads are never echoed into logs, preventing log injection or accidental sensitive data leakage.
+- Temporary QR images are loaded directly in memory or deleted immediately after display.
 
 ---
 

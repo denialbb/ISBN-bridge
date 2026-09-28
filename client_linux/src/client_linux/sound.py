@@ -22,9 +22,12 @@ class SoundManager:
             return p.resolve()
 
         # Check candidate directories
+        pkg_sounds = Path(__file__).resolve().parent / "sounds"
         repo_root = Path(__file__).resolve().parent.parent.parent.parent
         candidates = [
             Path(name),
+            pkg_sounds / Path(name).name,
+            pkg_sounds / name,
             repo_root / name,
             repo_root / "client" / name,
             repo_root / "client" / "sounds" / Path(name).name,

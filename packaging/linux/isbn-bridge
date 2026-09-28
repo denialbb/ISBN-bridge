@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -e
+
+INSTALL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/isbn-bridge"
+VENV_BIN="$INSTALL_DIR/venv/bin/isbn-bridge"
+
+if [[ -x "$VENV_BIN" ]]; then
+    exec "$VENV_BIN" "$@"
+fi
+
+if [[ -x "$INSTALL_DIR/venv/bin/python" ]]; then
+    exec "$INSTALL_DIR/venv/bin/python" -c "import sys; from client_linux.main import main; sys.exit(main())" "$@"
+fi
+
+if command -v uv >/dev/null 2>&1; then
+    exec uv run isbn-bridge "$@"
+fi
+
+exec python3 -c "import sys; from client_linux.main import main; sys.exit(main())" "$@"

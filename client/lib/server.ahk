@@ -61,7 +61,7 @@ class HttpListener {
         }
 
         SetTimer(this.pollTimer, 25)
-        Logger.Log("AutoHotkey local listener active on port " port)
+        Logger.Log("Desktop local listener active on port " port)
         return true
     }
 
@@ -227,7 +227,7 @@ class HttpListener {
         ; Strictly validate ISBN checksum and format before arming
         validatedISBN := ISBNValidator.Validate(rawISBN)
         if (validatedISBN = "") {
-            Logger.Log("Rejected invalid ISBN from local request: " rawISBN)
+            Logger.Log("Rejected invalid ISBN from local request")
             this.SendResponse(sock, 400, "Bad Request", "Invalid ISBN checksum or format")
             this.CloseClient(sock)
             return

@@ -5,10 +5,11 @@ import json
 import os
 import signal
 import sys
+import threading
 import time
-import tkinter as tk
 import urllib.request
 import urllib.error
+from typing import Optional
 
 from client_linux.config import AppConfig
 from client_linux.i18n import I18n
@@ -21,11 +22,17 @@ from client_linux.tray import TrayManager
 from client_linux.ui_qr import QRModal
 
 
-def send_local_command(path: str, method: str = "POST", body: str = "") -> bool:
+def send_local_command(
+    path: str,
+    method: str = "POST",
+    body: str = "",
+    silent: bool = False,
+    conf_path: Optional[str] = None,
+) -> bool:
     """Send command to running local client HTTP server."""
-    config = AppConfig()
+    config = AppConfig(conf_path)
     url = f"http://127.0.0.1:{config.http_port}{path}"
-    secret_path = HttpListener.find_secret_file()
+    secret_path = HttpListener.find_secret_file(config)
     headers = {}
     if secret_path and os.path.isfile(secret_path):
         try:
@@ -39,13 +46,16 @@ def send_local_command(path: str, method: str = "POST", body: str = "") -> bool:
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         with urllib.request.urlopen(req, timeout=1.5) as resp:
             content = resp.read().decode("utf-8", errors="replace")
-            print(content)
+            if not silent:
+                print(content)
             return True
     except urllib.error.HTTPError as e:
-        print(f"Error {e.code}: {e.read().decode('utf-8', errors='replace')}", file=sys.stderr)
+        if not silent:
+            print(f"Error {e.code}: {e.read().decode('utf-8', errors='replace')}", file=sys.stderr)
         return False
     except Exception as e:
-        print(f"Could not reach local ISBN Bridge client at {url}: {e}", file=sys.stderr)
+        if not silent:
+            print(f"Could not reach local ISBN Bridge client at {url}: {e}", file=sys.stderr)
         return False
 
 
@@ -59,47 +69,60 @@ def main():
     parser.add_argument("--conf", type=str, default=None, help="Path to scanner.conf")
     args = parser.parse_args()
 
+    # 1. Config & i18n
+    config = AppConfig(args.conf)
+    I18n.init(config.language)
+
     # CLI subcommands that communicate with existing running client
     if args.trigger:
-        sys.exit(0 if send_local_command("/trigger", method="POST") else 1)
+        sys.exit(0 if send_local_command("/trigger", method="POST", conf_path=args.conf) else 1)
     if args.show_qr:
-        sys.exit(0 if send_local_command("/qr/show", method="POST") else 1)
+        ServerManager.ensure_running(config)
+        sys.exit(0 if send_local_command("/qr/show", method="POST", conf_path=args.conf) else 1)
     if args.hide_qr:
-        sys.exit(0 if send_local_command("/qr/hide", method="POST") else 1)
+        sys.exit(0 if send_local_command("/qr/hide", method="POST", conf_path=args.conf) else 1)
     if args.status:
-        sys.exit(0 if send_local_command("/status", method="GET") else 1)
+        sys.exit(0 if send_local_command("/status", method="GET", conf_path=args.conf) else 1)
+
+    # Single-instance application handling:
+    # If another instance is already running (e.g. systemd user service),
+    # request it to display the pairing QR code and exit cleanly without error.
+    if send_local_command("/status", method="GET", silent=True, conf_path=args.conf):
+        Logger.log("ISBN Bridge is already running. Requesting existing instance to show QR modal.")
+        ServerManager.ensure_running(config)
+        send_local_command("/qr/show", method="POST", silent=True, conf_path=args.conf)
+        sys.exit(0)
 
     Logger.log("==================================================")
     Logger.log("             ISBN BRIDGE LINUX CLIENT             ")
     Logger.log("==================================================")
-
-    # 1. Config & i18n
-    config = AppConfig(args.conf)
-    I18n.init(config.language)
     Logger.log(f"Configuration loaded from {config.file_path}")
     Logger.log(f"Display mode: {'Wayland' if os.environ.get('WAYLAND_DISPLAY') else 'X11'}")
 
-    # 2. Tkinter Root for Centered QR Modal
-    root = tk.Tk()
-    root.withdraw()
-    QRModal.set_root(root)
-
-    # 3. Paste Engine
+    # 2. Paste Engine
     paste_engine = PasteEngine(config)
 
-    # 4. Local HTTP Listener (:8766)
+    # 3. Local HTTP Listener (:8766)
     listener = HttpListener(config, paste_engine)
     if not listener.start():
+        if send_local_command("/status", method="GET", silent=True, conf_path=args.conf):
+            Logger.log("ISBN Bridge started by another process. Showing QR modal.")
+            ServerManager.ensure_running(config)
+            send_local_command("/qr/show", method="POST", silent=True, conf_path=args.conf)
+            sys.exit(0)
+
         msg = I18n.get("listener_error_msg", config.http_port)
         title = I18n.get("listener_error_title")
         Logger.log(f"Fatal: {title} - {msg}")
         Notifier.notify(msg, title, urgency="critical")
         sys.exit(1)
 
-    # 5. Start or attach Go server
+    # 4. Start or attach Go server
     ServerManager.start_or_attach(config)
 
-    # 6. Shutdown handler
+    stop_event = threading.Event()
+
+    # 5. Shutdown handler
     def cleanup(*_):
         Logger.log("Shutting down ISBN Bridge Linux client...")
         try:
@@ -110,28 +133,30 @@ def main():
         listener.shutdown()
         ServerManager.shutdown(config)
         try:
-            root.destroy()
+            tray.stop()
         except Exception:
             pass
+        stop_event.set()
         sys.exit(0)
 
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
 
-    # 7. Tray Manager
+    # 6. Tray Manager
     tray = TrayManager(config, paste_engine, on_exit=cleanup)
     tray.start()
 
-    # 8. Notify active
+    # 7. Notify active
     Notifier.notify(I18n.get("client_active_tip", config.http_port), I18n.get("app_title"))
 
-    # 9. Startup QR modal if configured
+    # 8. Startup QR modal if configured
     if config.qr_auto_show_on_refresh:
-        root.after(400, lambda: QRModal.show(config))
+        threading.Thread(target=lambda: (time.sleep(0.4), QRModal.show(config)), daemon=True).start()
 
-    # 10. Run Tkinter event loop in main thread
+    # 9. Main thread wait loop
     try:
-        root.mainloop()
+        while not stop_event.is_set():
+            stop_event.wait(1.0)
     except KeyboardInterrupt:
         cleanup()
 

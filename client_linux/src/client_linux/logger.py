@@ -13,22 +13,20 @@ class Logger:
     @classmethod
     def get_log_path(cls) -> Path:
         if cls._log_path is None:
-            # Look in current dir, repo root, or client_linux dir
-            candidates = [
-                Path("isbn-bridge-debug.log"),
-                Path(__file__).resolve().parent.parent.parent.parent / "isbn-bridge-debug.log",
-                Path.cwd() / "isbn-bridge-debug.log",
-            ]
-            for c in candidates:
-                if c.exists():
-                    cls._log_path = c.resolve()
-                    return cls._log_path
-            # Default to repo root if possible, or cwd
+            # Check if running in git repository
             repo_root = Path(__file__).resolve().parent.parent.parent.parent
             if (repo_root / "go.mod").exists():
                 cls._log_path = repo_root / "isbn-bridge-debug.log"
-            else:
-                cls._log_path = Path.cwd() / "isbn-bridge-debug.log"
+                return cls._log_path
+
+            # Check XDG user config directory
+            xdg_config_home = os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))
+            config_dir = Path(xdg_config_home) / "isbn-bridge"
+            if config_dir.exists():
+                cls._log_path = config_dir / "isbn-bridge-debug.log"
+                return cls._log_path
+
+            cls._log_path = Path.cwd() / "isbn-bridge-debug.log"
         return cls._log_path
 
     @classmethod

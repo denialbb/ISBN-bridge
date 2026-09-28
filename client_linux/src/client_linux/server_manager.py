@@ -17,8 +17,19 @@ class ServerManager:
 
     @classmethod
     def find_binary(cls) -> Optional[Path]:
+        import shutil
+        which_path = shutil.which("isbn-bridge-server")
+        if which_path:
+            return Path(which_path).resolve()
+
         repo_root = Path(__file__).resolve().parent.parent.parent.parent
+        pkg_root = Path(__file__).resolve().parent
         candidates = [
+            Path.home() / ".local" / "bin" / "isbn-bridge-server",
+            Path("/usr/local/bin/isbn-bridge-server"),
+            Path("/usr/bin/isbn-bridge-server"),
+            pkg_root / "bin" / "isbn-bridge-server",
+            pkg_root.parent / "bin" / "isbn-bridge-server",
             Path("bin/isbn-bridge-server"),
             repo_root / "bin" / "isbn-bridge-server",
             repo_root / "isbn-bridge-server",
@@ -47,15 +58,24 @@ class ServerManager:
 
         binary = cls.find_binary()
         repo_root = Path(__file__).resolve().parent.parent.parent.parent
+        is_repo = (repo_root / "go.mod").exists()
+
+        conf_path = Path(config.file_path).resolve()
+        conf_dir = conf_path.parent
+        token_path = conf_dir / "token.txt"
+
+        args = []
+        if conf_path.exists():
+            args.extend(["-conf", str(conf_path), "-token-file", str(token_path)])
 
         if binary:
-            cmd = [str(binary)]
-            work_dir = repo_root
+            cmd = [str(binary)] + args
+            work_dir = conf_dir if conf_dir.exists() else (repo_root if is_repo else Path.home())
         else:
-            # Fall back to running via go run if available
-            Logger.log("Compiled server binary not found; attempting 'go run ./cmd/server' via mise...")
-            cmd = ["go", "run", "./cmd/server"]
-            work_dir = repo_root
+            # Fall back to running via go run if available in repo
+            Logger.log("Compiled server binary not found; attempting 'go run ./cmd/server'...")
+            cmd = ["go", "run", "./cmd/server"] + args
+            work_dir = repo_root if is_repo else conf_dir
 
         try:
             cls.server_process = subprocess.Popen(

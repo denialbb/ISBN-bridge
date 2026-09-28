@@ -14,9 +14,19 @@ def test_find_icon():
     tray = TrayManager(cfg, engine)
 
     icon_name, theme_dir = tray._find_icon()
-    assert icon_name in ("tray", "isbn-bridge")
-    if icon_name == "tray":
+    assert icon_name in ("isbn-bridge-symbolic", "tray-symbolic", "tray", "isbn-bridge")
+    if icon_name != "isbn-bridge":
         assert theme_dir is not None
+
+
+def test_on_indicator_activate():
+    cfg = AppConfig()
+    engine = PasteEngine(cfg)
+    tray = TrayManager(cfg, engine)
+    tray.show_qr = MagicMock()
+
+    tray._on_indicator_activate(None, 0, 0)
+    tray.show_qr.assert_called_once()
 
 
 def test_tray_toggle_actions():

@@ -1,4 +1,4 @@
-# ISBN Bridge Linux Client (AutoHotkey Substitution Layer)
+# ISBN Bridge Linux Desktop Client
 
 Linux desktop client for [ISBN Bridge](../README.md), supporting **Wayland (Hyprland, Sway, wlroots)** and **X11**.
 

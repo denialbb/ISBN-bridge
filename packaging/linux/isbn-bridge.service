@@ -1,0 +1,16 @@
+[Unit]
+Description=ISBN Bridge Desktop Service
+Documentation=https://github.com/denialbb/ISBN-bridge
+After=graphical-session.target network.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/isbn-bridge
+WorkingDirectory=%h/.config/isbn-bridge
+Restart=on-failure
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=graphical-session.target

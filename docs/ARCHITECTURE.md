@@ -1,7 +1,8 @@
 # System Architecture & Technical Specifications
 
 ![Go backend](https://img.shields.io/badge/backend-Go-00ADD8?logo=go&logoColor=white)
-![AHK client](https://img.shields.io/badge/client-AutoHotkey_v2-334455?logo=autohotkey&logoColor=white)
+![Windows client](https://img.shields.io/badge/client-AutoHotkey_v2-334455?logo=autohotkey&logoColor=white)
+![Linux client](https://img.shields.io/badge/client-Python_3.10%2B-3776AB?logo=python&logoColor=white)
 
 This document details the internal architecture, network communication, and module structure of the **ISBN Bridge** pipeline.
 
@@ -9,22 +10,23 @@ This document details the internal architecture, network communication, and modu
 
 ## 1. System Overview
 
-The system consists of three loosely coupled layers designed for low latency, security, and local execution:
+The system consists of three loosely coupled layers designed for low latency, security, and local execution across Windows and Linux:
 
 ```
 ┌─────────────────────────────────┐
-│     Mobile Client (iOS)         │
+│  Mobile Client (iOS / Android)  │
 │  - Barcode / ISBN Camera Loop   │
 │  - Token Storage & SHA-256 Sign │
 └────────────────┬────────────────┘
                  │
-                 │ HTTP POST /isbn (over LAN)
+                 │ HTTP POST /isbn (over Direct USB Tether or Wi-Fi LAN)
                  │ Header: Authorization: Bearer <SHA256>
                  │ Header: Timestamp: <yyyy-MM-dd HH:mm:ss>
                  │ Body:   <ISBN>
                  ▼
 ┌─────────────────────────────────┐
 │     Go Backend (:8765)          │
+│  - Dynamic USB/LAN Resolver     │
 │  - CSPRNG Token Manager         │
 │  - SHA-256 Constant-Time Auth   │
 │  - ISBN-10 / ISBN-13 Checksums  │
@@ -32,33 +34,36 @@ The system consists of three loosely coupled layers designed for low latency, se
 └────────────────┬────────────────┘
                  │
                  │ HTTP POST /paste, /qr/show, /qr/hide (localhost only)
+                 │ Header: X-ISBN-Bridge-Local: <32-char secret>
                  │ Body: <Normalized ISBN>
                  ▼
-┌─────────────────────────────────┐
-│     AutoHotkey Client (:8766)   │
-│  - Non-blocking Winsock Server  │
-│  - Centered QR Overlay │
-│  - Hover-detection & Paste      │
-│  - Tray Menu & Config Sync      │
-└─────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│     Desktop Client (:8766)                             │
+│  ├─ Windows: AutoHotkey v2 (Winsock listener, GUI QR)  │
+│  └─ Linux: Python (HTTP listener, Tkinter, AppIndicator)│
+│     - Focus-targeted auto-typing / paste               │
+│     - System tray controls & symbolic theme tinting    │
+│     - Centered borderless QR modal popup               │
+└────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## 2. Go Backend Architecture (`pkg/`)
 
-The Go backend acts as the secure gateway between mobile devices on the local Wi-Fi network and the desktop environment.
+The Go backend acts as the secure gateway between mobile devices (connected via USB cable tethering or local Wi-Fi) and the desktop environment.
 
 ### Module Breakdown
 
 | Package | Path | Purpose |
 |---|---|---|
+| **Interface Resolver** | `pkg/netutil/interfaces.go` | Resolves server IP based on configured mode (`auto`, `usb`, `lan`). Prioritizes IP-over-USB tethering (`172.20.10.x` on iOS `ipheth`, `192.168.4x.x` on Android RNDIS). Hot-plug monitor dynamically detects interface switches. |
 | **ISBN Validator** | `pkg/isbn/validator.go` | Single-pass byte-filter normalization (`strings.Builder`) and mathematical checksum verification for ISBN-10 (weighted sum mod 11) and ISBN-13 (alternate 1x/3x mod 10). |
 | **Token Manager** | `pkg/auth/token.go` | Generates 48-character cryptographically secure tokens via `crypto/rand.Read`. Manages thread-safe rotation (`sync.RWMutex`), dynamic TTL adjustment, and exports PNG / terminal QR codes. |
 | **Signature Verifier** | `pkg/auth/verifier.go` | Computes SHA-256 signature and uses `crypto/subtle.ConstantTimeCompare` to prevent timing attacks. Enforces timestamp drift limits against replay attacks. |
 | **Config Loader** | `pkg/config/config.go` | Reads, writes, and synchronizes options with `scanner.conf`. |
-| **HTTP Server** | `pkg/server/server.go` | Exposes REST endpoints, validates payloads up to 16 KB, and forwards verified ISBNs to the local AutoHotkey client. |
-| **AHK Forwarder** | `pkg/server/forwarder.go` | Dispatches HTTP requests to `127.0.0.1:8766` with a strict 2-second timeout. |
+| **HTTP Server** | `pkg/server/server.go` | Exposes REST endpoints, validates payloads up to 16 KB, and forwards verified ISBNs to the local desktop client. |
+| **AHK/Desktop Forwarder**| `pkg/server/forwarder.go` | Dispatches HTTP requests to `127.0.0.1:8766` with `X-ISBN-Bridge-Local` authentication and a 2-second timeout. |
 
 ### Go Server REST Endpoints
 
@@ -118,3 +123,42 @@ client/
 4. **Centered QR Modal (`lib/ui_qr.ahk`)**:
    - Borderless, frameless GUI window appearing in the exact center of the monitor.
    - Displays live token TTL status and automatically closes on scan, click, or `ESC`.
+
+---
+
+## 4. Linux Desktop Client Architecture (`client_linux/`)
+
+The Linux desktop client is implemented in Python (3.10+) with zero heavy web dependencies, designed for low-memory footprint and native integration on Wayland and X11:
+
+```
+client_linux/
+├── src/client_linux/
+│   ├── main.py             # Entrypoint, lifecycle, and signal handling
+│   ├── config.py           # AppConfig: scanner.conf parser & writer
+│   ├── logger.py           # Logger: sanitized file logging to isbn-bridge-debug.log
+│   ├── isbn.py             # Pure-Python ISBN-10 / ISBN-13 validator & normalizer
+│   ├── paste.py            # PasteEngine: auto-typing via wtype, xdotool, or uinput
+│   ├── server.py           # HttpListener: standard library HTTP server with secret check
+│   ├── server_manager.py   # Spawns, monitors, and stops Go backend server
+│   ├── sound.py            # SoundManager: audio playback via paplay, aplay, or pw-play
+│   ├── tooltip.py          # Notifier: desktop notifications via notify-send
+│   ├── tray.py             # TrayManager: AyatanaAppIndicator / SNI with Omarchy tinting
+│   └── ui_qr.py            # QRModal: Tkinter borderless centered modal popup
+```
+
+### Key Subsystems
+
+1. **System Tray & Omarchy Theme Integration (`tray.py`)**:
+   - Uses `AyatanaAppIndicator3` (or `AppIndicator3` fallback) to provide a desktop tray indicator across Hyprland/Omarchy, Sway, KDE Plasma, and GNOME.
+   - Discovers `isbn-bridge-symbolic.png` so modern status bars (such as Omarchy's Quickshell bar) recognize it as a freedesktop symbolic icon and automatically tint it with the theme foreground color (`colorizationColor`).
+   - Hooks into the `activate` signal: left-clicking the tray icon immediately displays the centered QR pairing modal on the focused monitor.
+
+2. **Paste & Keystroke Injection Engine (`paste.py`)**:
+   - Wayland: Dispatches typing via `wtype` or kernel `/dev/uinput`, reading active window titles over Hyprland or Sway IPC sockets.
+   - X11: Falls back to `xdotool` and `xclip`.
+   - Verifies target tab title before emission to avoid typing into unintended applications.
+
+3. **Centered QR Pairing Modal (`ui_qr.py`)**:
+   - Pure Tkinter borderless popup (`overrideredirect(True)`), styled with dark background and brand accent.
+   - Inspects monitor geometry dynamically via `hyprctl monitors -j` or screen dimensions to center the modal on the currently focused display.
+   - Automatically re-renders in-memory when tokens rotate or the network interface changes.

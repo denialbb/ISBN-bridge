@@ -98,3 +98,23 @@ def test_oversized_content_length_returns_413(test_server):
     with pytest.raises(urllib.error.HTTPError) as exc_info:
         urllib.request.urlopen(req)
     assert exc_info.value.code == 413
+
+def test_status_endpoint(test_server):
+    listener, engine, secret = test_server
+    url = f"http://127.0.0.1:18766/status"
+    req = urllib.request.Request(url, method="GET")
+    with urllib.request.urlopen(req) as resp:
+        assert resp.status == 200
+        import json
+        data = json.loads(resp.read().decode())
+        assert data["status"] == "ok"
+
+def test_qr_show_endpoint(test_server):
+    listener, engine, secret = test_server
+    url = f"http://127.0.0.1:18766/qr/show"
+    headers = {"X-ISBN-Bridge-Local": secret}
+    req = urllib.request.Request(url, headers=headers, method="POST")
+    with urllib.request.urlopen(req) as resp:
+        assert resp.status == 200
+        assert resp.read() == b"QR shown"
+

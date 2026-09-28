@@ -23,7 +23,7 @@ import (
 func main() {
 	confFile := flag.String("conf", "scanner.conf", "Path to scanner.conf unified configuration file")
 	portFlag := flag.Int("port", 0, "Override HTTP port for incoming iOS Shortcut requests")
-	ahkPortFlag := flag.Int("ahk-port", 0, "Override AutoHotkey listener port")
+	ahkPortFlag := flag.Int("ahk-port", 0, "Override desktop listener port")
 	tokenFile := flag.String("token-file", "token.txt", "Path to file for persisting active token")
 	hideFlag := flag.Bool("hide-console", false, "Hide server console window on Windows")
 	netModeFlag := flag.String("net-mode", "", "Override network interface mode (auto, usb, lan)")
@@ -63,12 +63,11 @@ func main() {
 	}
 
 	tokenMgr := auth.NewTokenManager(*tokenFile, appCfg.TokenTTL)
-	token, err := tokenMgr.GetToken()
-	if err != nil {
+	if _, err := tokenMgr.GetToken(); err != nil {
 		log.Fatalf("Failed to initialize token: %v", err)
 	}
 
-	// Shared secret for the local AutoHotkey listener: proves that
+	// Shared secret for the local desktop listener: proves that
 	// /paste, /qr/show and /qr/hide requests come from this server.
 	// Written next to the token file (0600); the client re-reads it
 	// per request, so server restarts need no client restart.
@@ -78,7 +77,7 @@ func main() {
 	}
 	secretPath := filepath.Join(filepath.Dir(*tokenFile), "local_secret.txt")
 	if err := os.WriteFile(secretPath, []byte(localSecret), 0600); err != nil {
-		log.Printf("Warning: cannot persist local secret (%v); AHK paste auth disabled", err)
+		log.Printf("Warning: cannot persist local secret (%v); desktop paste auth disabled", err)
 		localSecret = ""
 	}
 
@@ -122,7 +121,7 @@ func main() {
 		return netutil.FormatServerURL(iface.IP, appCfg.Port)
 	})
 
-	log.Printf("Active Token: %.8s... (full token only via /pair on LAN)", token)
+	log.Println("Active Token: initialized (scan QR code to pair)")
 	log.Printf("Token TTL:    %v (auto-refreshes)", appCfg.TokenTTL)
 	log.Printf("Timestamp skew window: ±%v", appCfg.MaxSkew)
 	log.Printf("Rate limit:   %d req / %v per IP on POST /isbn", appCfg.RateLimitMax, appCfg.RateLimitWindow)
@@ -130,10 +129,10 @@ func main() {
 	log.Printf("Network mode: %s (interface: %s, IP: %s, type: %s)",
 		appCfg.NetworkMode, selectedIface.Name, selectedIface.IP, selectedIface.Type)
 	log.Printf("Listening on: http://0.0.0.0:%d", appCfg.Port)
-	log.Printf("  -> Mobile Pairing URL: %s/pair?token=%.8s... (scan QR to pair)", serverURL, token)
+	log.Printf("  -> Mobile Pairing URL: %s/pair (access via QR scan)", serverURL)
 	log.Printf("  -> Browser QR page:    %s/qr", serverURL)
 	log.Printf("  -> ISBN Post URL:      %s/isbn", serverURL)
-	log.Printf("Forwarding to AutoHotkey at: %s", ahkTarget)
+	log.Printf("Forwarding to desktop client at: %s", ahkTarget)
 	log.Println("--------------------------------------------------")
 	log.Println("Pairing QR is shown as a desktop popup and at /qr in a browser.")
 
@@ -154,13 +153,13 @@ func main() {
 
 				if currentIface.IP != lastIP {
 					log.Println("--------------------------------------------------")
-					log.Printf("🔌 Network interface changed: %s (%s) -> %s (%s)",
+					log.Printf("Network interface changed: %s (%s) -> %s (%s)",
 						lastIP, lastType, currentIface.IP, currentIface.Type)
 					lastIP = currentIface.IP
 					lastType = currentIface.Type
 					newURL := netutil.FormatServerURL(currentIface.IP, appCfg.Port)
 					tokenMgr.SetBaseURL(newURL)
-					log.Printf("  -> Updated Mobile Pairing URL: %s/pair?token=%.8s... (scan QR to pair)", newURL, tokenMgr.CurrentToken())
+					log.Printf("  -> Updated Mobile Pairing URL: %s/pair (access via QR scan)", newURL)
 					log.Printf("  -> Updated Browser QR page:    %s/qr", newURL)
 					log.Printf("  -> Updated ISBN Post URL:      %s/isbn", newURL)
 					log.Println("--------------------------------------------------")
@@ -175,17 +174,17 @@ func main() {
 		}
 	}()
 
-	// Trigger seamless centered QR popup in AutoHotkey on startup
+	// Trigger seamless centered QR popup in desktop client on startup
 	if appCfg.QRAutoShowOnRefresh {
 		go func() {
 			for i := 0; i < 10; i++ {
 				time.Sleep(500 * time.Millisecond)
 				if err := forwarder.ShowQR(context.Background()); err == nil {
-					log.Printf("Successfully requested QR modal popup from AutoHotkey")
+					log.Printf("Successfully requested QR modal popup from desktop client")
 					return
 				}
 			}
-			log.Printf("Note: AutoHotkey listener not reachable for startup QR popup")
+			log.Printf("Note: desktop listener not reachable for startup QR popup")
 		}()
 	}
 
@@ -196,13 +195,13 @@ func main() {
 	go func() {
 		for range ticker.C {
 			if tokenMgr.IsExpired() {
-				newToken, err := tokenMgr.RefreshToken()
+				_, err := tokenMgr.RefreshToken()
 				if err != nil {
 					log.Printf("Error auto-refreshing expired token: %v", err)
 					continue
 				}
 				log.Println("--------------------------------------------------")
-				log.Printf("🔄 Token expired! New token generated (prefix: %.8s...)", newToken)
+				log.Println("Token expired! New token generated.")
 				log.Println("Open /qr in a browser for the updated pairing code:")
 				log.Println("--------------------------------------------------")
 

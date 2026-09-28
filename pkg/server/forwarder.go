@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Forwarder defines the contract for communicating with AutoHotkey.
+// Forwarder defines the contract for communicating with the desktop client.
 type Forwarder interface {
 	Forward(ctx context.Context, isbn string) error
 	ShowQR(ctx context.Context) error
@@ -17,11 +17,11 @@ type Forwarder interface {
 }
 
 // LocalSecretHeader authenticates the Go forwarder to the local
-// AutoHotkey listener. The secret is generated at server startup and
+// desktop client listener. The secret is generated at server startup and
 // written to local_secret.txt next to the token file (0600).
 const LocalSecretHeader = "X-ISBN-Bridge-Local"
 
-// AHKForwarder sends actions to the local AutoHotkey script via HTTP.
+// AHKForwarder sends actions to the local desktop client via HTTP.
 type AHKForwarder struct {
 	baseURL     string
 	client      *http.Client
@@ -47,23 +47,23 @@ func NewAHKForwarder(target string) *AHKForwarder {
 	}
 }
 
-// SetLocalSecret sets the shared secret sent to the AutoHotkey
+// SetLocalSecret sets the shared secret sent to the desktop client
 // listener. Empty means no secret header is sent.
 func (f *AHKForwarder) SetLocalSecret(secret string) {
 	f.localSecret = secret
 }
 
-// Forward delivers the validated ISBN to the local AutoHotkey listener.
+// Forward delivers the validated ISBN to the local desktop listener.
 func (f *AHKForwarder) Forward(ctx context.Context, isbn string) error {
 	return f.post(ctx, "/paste", isbn)
 }
 
-// ShowQR instructs AutoHotkey to pop up the seamless centered QR code.
+// ShowQR instructs the desktop client to pop up the seamless centered QR code.
 func (f *AHKForwarder) ShowQR(ctx context.Context) error {
 	return f.post(ctx, "/qr/show", "")
 }
 
-// HideQR instructs AutoHotkey to dismiss the centered QR code (e.g. after successful scan).
+// HideQR instructs the desktop client to dismiss the centered QR code (e.g. after successful scan).
 func (f *AHKForwarder) HideQR(ctx context.Context) error {
 	return f.post(ctx, "/qr/hide", "")
 }
@@ -81,12 +81,12 @@ func (f *AHKForwarder) post(ctx context.Context, path, body string) error {
 
 	resp, err := f.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to contact AutoHotkey at %s: %w", url, err)
+		return fmt.Errorf("failed to contact desktop client at %s: %w", url, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("AutoHotkey returned status %d for %s", resp.StatusCode, path)
+		return fmt.Errorf("desktop client returned status %d for %s", resp.StatusCode, path)
 	}
 	return nil
 }

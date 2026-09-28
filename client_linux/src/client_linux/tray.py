@@ -20,10 +20,13 @@ from client_linux.ui_qr import QRModal
 
 
 def _ensure_gi():
-    """Ensure system site-packages containing PyGObject/libayatana are in sys.path."""
-    for p in sorted(glob.glob("/usr/lib/python3*/site-packages")):
-        if p not in sys.path:
-            sys.path.append(p)
+    """Ensure system site-packages matching current Python ABI are in sys.path."""
+    abi_path = f"/usr/lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages"
+    if os.path.isdir(abi_path) and abi_path not in sys.path:
+        sys.path.append(abi_path)
+    debian_path = "/usr/lib/python3/dist-packages"
+    if os.path.isdir(debian_path) and debian_path not in sys.path:
+        sys.path.append(debian_path)
 
 
 class TrayManager:
@@ -33,6 +36,7 @@ class TrayManager:
         self.on_exit = on_exit
         self.indicator = None
         self._thread: Optional[threading.Thread] = None
+        self._item_qr = None
 
     def start(self) -> None:
         """Start tray indicator if supported, or log fallback."""
@@ -79,11 +83,28 @@ class TrayManager:
             self.indicator.set_title("ISBN Bridge")
             menu = self._build_gtk_menu(Gtk)
             self.indicator.set_menu(menu)
+
+            # Left click / activate -> show QR code modal
+            try:
+                self.indicator.connect("activate", self._on_indicator_activate)
+            except Exception as e:
+                Logger.log(f"TrayManager: activate signal not supported: {e}")
+
+            if hasattr(self, "_item_qr") and self._item_qr:
+                try:
+                    self.indicator.set_secondary_activate_target(self._item_qr)
+                except Exception as e:
+                    Logger.log(f"TrayManager: secondary activate not supported: {e}")
+
             Gtk.main()
 
         self._thread = threading.Thread(target=run, daemon=True)
         self._thread.start()
         Logger.log("TrayManager: AppIndicator initialized")
+
+    def _on_indicator_activate(self, indicator=None, x: int = 0, y: int = 0) -> None:
+        """Handle left-click activation on the tray indicator."""
+        self.show_qr()
 
     def _find_icon(self) -> Tuple[str, Optional[str]]:
         """Find tray icon, returning (icon_name, theme_dir)."""
@@ -92,11 +113,14 @@ class TrayManager:
         cwd_assets = Path.cwd() / "client" / "assets"
 
         for asset_dir in [pkg_assets, repo_assets, cwd_assets]:
+            for sym_name in ["isbn-bridge-symbolic", "tray-symbolic"]:
+                if (asset_dir / f"{sym_name}.png").is_file():
+                    return (sym_name, str(asset_dir.resolve()))
             tray_png = asset_dir / "tray.png"
             if tray_png.is_file():
                 return ("tray", str(asset_dir.resolve()))
 
-        return ("isbn-bridge", None)
+        return ("isbn-bridge-symbolic", None)
 
     def _build_gtk_menu(self, Gtk):
         menu = Gtk.Menu()
@@ -166,6 +190,7 @@ class TrayManager:
         # Quick Actions
         item_qr = Gtk.MenuItem(label=I18n.get("tray_show_qr"))
         item_qr.connect("activate", lambda w: self.show_qr())
+        self._item_qr = item_qr
         menu.append(item_qr)
 
         item_reset = Gtk.MenuItem(label=I18n.get("tray_reset_token"))

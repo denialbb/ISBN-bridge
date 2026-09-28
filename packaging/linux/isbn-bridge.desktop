@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=ISBN Bridge
+GenericName=Barcode Scanner Bridge
+Comment=Bridge mobile barcode scanning directly to PC input fields
+Exec=isbn-bridge
+Icon=isbn-bridge
+Terminal=false
+Type=Application
+Categories=Utility;Office;
+Keywords=barcode;isbn;scanner;mobile;bridge;
+StartupNotify=false
+X-GNOME-UsesNotifications=true

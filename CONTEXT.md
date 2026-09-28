@@ -12,3 +12,5 @@
 - **QR Modal**: Centered desktop popup window displaying the current pairing QR code and branding artwork.
 - **IP-over-USB / Tethering**: Direct point-to-point IP link over a physical USB cable (via iOS Personal Hotspot `172.20.10.0/28` or Android USB Tethering `192.168.42.0/24`). Allows offline mobile scanning without Wi-Fi router or LAN connectivity.
 - **Dynamic Interface Resolver (`pkg/netutil`)**: Component that detects active network adapters and hot-plug events, prioritizing USB tethering over LAN when `network_mode = auto`, and dynamically updating pairing URLs and on-screen QR codes without server restart.
+- **Symbolic Tray Icon (`isbn-bridge-symbolic`)**: Freedesktop monochrome icon convention allowing modern Linux desktop panels (e.g. Omarchy, Hyprland, Waybar, GNOME, KDE) to dynamically tint the tray indicator to match bar foreground colors.
+- **Zero Log Leakage**: Security policy ensuring tokens, secret query parameters, and unvalidated request payloads are never output to stdout, stderr, or debug log files.

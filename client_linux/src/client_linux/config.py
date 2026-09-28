@@ -32,16 +32,31 @@ class AppConfig:
 
     @staticmethod
     def find_config_file() -> str:
+        env_conf = os.environ.get("ISBN_BRIDGE_CONF")
+        if env_conf and os.path.isfile(env_conf):
+            return str(Path(env_conf).resolve())
+
+        # Check candidates in cwd or repo root
+        repo_root = Path(__file__).resolve().parent.parent.parent.parent
         candidates = [
             Path("scanner.conf"),
-            Path(__file__).resolve().parent.parent.parent.parent / "scanner.conf",
             Path.cwd() / "scanner.conf",
+            repo_root / "scanner.conf",
             Path.cwd().parent / "scanner.conf",
         ]
         for c in candidates:
             if c.is_file():
                 return str(c.resolve())
-        return "scanner.conf"
+
+        # Check XDG user config directory
+        xdg_config_home = os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))
+        xdg_conf = Path(xdg_config_home) / "isbn-bridge" / "scanner.conf"
+        if xdg_conf.is_file():
+            return str(xdg_conf.resolve())
+
+        if (repo_root / "go.mod").exists():
+            return str((repo_root / "scanner.conf").resolve())
+        return str(xdg_conf.resolve())
 
     def load(self) -> None:
         if not os.path.isfile(self.file_path):
