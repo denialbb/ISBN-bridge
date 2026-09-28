@@ -98,7 +98,7 @@ OS language unless overridden (see section 4).
 | **Settings → Audio Feedback** | Submenu with the bundled samples plus **Enable sound**. | Yes (`scanner.conf`) |
 | **Settings → Show QR code on token refresh** | Toggles whether the QR pops up automatically when tokens rotate. | Yes (`scanner.conf`) |
 | **Settings → Language** | **Auto** plus every installed language. | Yes (`scanner.conf`) |
-| **Show centered QR code** | Displays the QR popup (also: left-click the tray icon). | Action |
+| **Show centered QR code** | Displays the QR popup (also: middle-click the tray icon). | Action |
 | **Show/Hide server console** | Label follows the current console state. | Action |
 | **Reset token (New QR)** | Immediately rotates the token and shows the new QR code. | Action |
 | **Open scanner.conf** | Opens `scanner.conf` in the default editor. | Action |

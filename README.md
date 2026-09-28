@@ -43,12 +43,12 @@
 - **Direct USB Cable & Wi-Fi LAN**: Connect your iPhone or Android phone directly over USB cable (USB tethering) for instantaneous, low-latency scanning that operates completely offline and air-gapped from Wi-Fi LAN, or scan over local Wi-Fi. Hot-plugging USB dynamically detects interface shifts and updates pairing endpoints.
 - **Cross-Platform Native Clients**:
   - **Windows (AutoHotkey v2)**: Native taskbar tray, non-blocking Winsock listener, sound effects, and focus-targeted auto-typing.
-  - **Linux (Python 3.10+)**: Full Wayland (Hyprland, Sway, GNOME) and X11 support, desktop notifications, native system tray with auto theme tinting (Omarchy / freedesktop symbolic), left-click quick action to show pairing QR, and automated typing via `wtype`, `xdotool`, or `uinput`.
-- **Instant Desktop Pairing**: Centered borderless QR modal pops up on your active monitor at startup or whenever the security token rotates. Left-clicking the Linux tray icon or tray menu instantly triggers the QR code.
+  - **Linux (Python 3.10+)**: Full Wayland (Hyprland, Sway, GNOME) and X11 support, desktop notifications, native system tray with auto theme tinting (Omarchy / freedesktop symbolic), middle-click to show the pairing QR, and automated typing via `wtype`, `xdotool`, or `uinput`. (Left-click is swallowed inside libayatana-appindicator; on Omarchy apply `packaging/linux/patch-omarchy-tray.py` to route it to the QR.)
+- **Instant Desktop Pairing**: Centered borderless QR modal pops up on your active monitor at startup or whenever the security token rotates. Middle-clicking the Linux tray icon (or *Show QR* in the tray menu) instantly shows the QR code.
 - **Hover Paste**: If your mouse or focus is over a text field in your target window (e.g. Hardcover), the ISBN pastes without manual clicking.
 - **Zero Information Leakage**: Strict logging hygiene ensures rotating security tokens, pairing URL secrets, and unvalidated payloads are never written to standard output or debug log files.
 - **Unified Configuration**: All ports, network modes, timings, and behaviors are configured through a single file: [`scanner.conf`](scanner.conf).
-- **Taskbar Tray Controls**: Left-click for QR code, right-click to change token expiration (15m to 24h), toggle hover paste, audio, or overwrite mode on the fly.
+- **Taskbar Tray Controls**: Middle-click for QR code, right-click to change token expiration (15m to 24h), toggle hover paste, audio, or overwrite mode on the fly.
 - **Audio Feedback**: Short tap sound feedback when an ISBN is successfully pasted.
 - **Multilingual**: English and Italian ship by default (auto-detected from OS, switchable in tray). More languages are drop-in files — see [Configuration](docs/CONFIGURATION.md).
 
@@ -110,31 +110,48 @@ For full setup instructions, see [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 
 ## Quick Start
 
-### Windows
+### Windows (PowerShell)
 
-1. Download `ISBN-Bridge-v1.0.3-windows-x64.zip` from the [Releases page](https://github.com/denialbb/ISBN-bridge/releases) and extract anywhere.
-2. Double-click **`ISBN-Bridge.exe`** — it starts the background server and displays the centered pairing QR code.
-3. *(Building from source)*:
-   ```powershell
-   go build -o bin/isbn-bridge-server.exe ./cmd/server
-   & "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" "client\main.ahk"
-   ```
+One-time prerequisites, then build and run (the AHK client starts its Go server automatically):
 
-### Linux
+```powershell
+winget install -e --id GoLang.Go --id AutoHotkey.AutoHotkey --id Git.Git
+git clone https://github.com/denialbb/ISBN-bridge.git; cd ISBN-bridge
+go build -o client/isbn-bridge-server.exe ./cmd/server
+& "$env:ProgramFiles\AutoHotkey\v2\AutoHotkey64.exe" client\main.ahk
+```
 
-1. Build the server binary or let the client compile/run it:
-   ```bash
-   go build -o bin/isbn-bridge-server ./cmd/server
-   ```
-2. Run the Linux client with `uv` or `pip`:
-   ```bash
-   cd client_linux
-   uv run client-linux
-   # Or install into your Python environment:
-   pip install -e .
-   isbn-bridge-linux
-   ```
-3. The indicator appears in your system tray (supporting Hyprland, Omarchy, Sway, GNOME, KDE). Left-click the tray icon at any time to open the centered pairing QR modal.
+The taskbar tray appears and the centered pairing QR code pops up. Scan it with your phone (see Pair & Scan below).
+
+### Linux (bash)
+
+Install the latest release tarball and enable the user service (processes run as `isbn-bridge-client` + `isbn-bridge-server`):
+
+```bash
+curl -sSL -o /tmp/isbn-bridge.tar.gz https://github.com/denialbb/ISBN-bridge/releases/download/v1.1.1/ISBN-Bridge-v1.1.1-linux-x64.tar.gz
+tar -xzf /tmp/isbn-bridge.tar.gz -C /tmp && /tmp/ISBN-Bridge-v1.1.1-linux-x64/install.sh
+systemctl --user enable --now isbn-bridge.service
+```
+
+Or grab any version from the [Releases page](https://github.com/denialbb/ISBN-bridge/releases) and run its `install.sh`.
+
+Notes:
+
+- **Phone can't reach the PC over Wi-Fi?** The port is usually firewalled:
+  ```bash
+  sudo ufw allow 8765/tcp
+  ```
+  then reload the pairing URL on the phone (same Wi-Fi network).
+- **Left-click the tray icon for QR (Omarchy/Quickshell only):**
+  ```bash
+  sudo python3 packaging/linux/patch-omarchy-tray.py && omarchy-restart-shell
+  ```
+  Middle-click shows the QR with no patch; right-click always opens the menu.
+- **Run from source instead:**
+  ```bash
+  go build -o bin/isbn-bridge-server ./cmd/server
+  cd client_linux && uv run client-linux
+  ```
 
 ### Pair & Scan
 

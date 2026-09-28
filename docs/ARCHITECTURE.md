@@ -151,7 +151,7 @@ client_linux/
 1. **System Tray & Omarchy Theme Integration (`tray.py`)**:
    - Uses `AyatanaAppIndicator3` (or `AppIndicator3` fallback) to provide a desktop tray indicator across Hyprland/Omarchy, Sway, KDE Plasma, and GNOME.
    - Discovers `isbn-bridge-symbolic.png` so modern status bars (such as Omarchy's Quickshell bar) recognize it as a freedesktop symbolic icon and automatically tint it with the theme foreground color (`colorizationColor`).
-   - Hooks into the `activate` signal: left-clicking the tray icon immediately displays the centered QR pairing modal on the focused monitor.
+   - Middle-click (SNI `SecondaryActivate`) activates the *Show QR* target and displays the centered QR pairing modal. A primary `Activate` (left click) is swallowed inside libayatana-appindicator (no signal exposed), so on Omarchy `packaging/linux/patch-omarchy-tray.py` routes left-click to the secondary target in the bar widget.
 
 2. **Paste & Keystroke Injection Engine (`paste.py`)**:
    - Wayland: Dispatches typing via `wtype` or kernel `/dev/uinput`, reading active window titles over Hyprland or Sway IPC sockets.
