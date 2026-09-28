@@ -29,6 +29,33 @@ def _ensure_gi():
         sys.path.append(debian_path)
 
 
+def _tick_label(base: str, on: bool) -> str:
+    """Prefix a "✓ " marker when the option is on.
+
+    The SNI menu exporter (libayatana-appindicator) drops
+    GtkCheckMenuItem state: no toggle-type/toggle-state crosses D-Bus
+    (verified via GetLayout), so hosts like quickshell can never render
+    a native tick. Encoding the state in the label keeps it visible on
+    every host. The widget stays a CheckMenuItem so toggle-capable hosts
+    keep working if the exporter ever passes state through.
+    """
+    return ("✓ " if on else "") + base
+
+
+def _make_check_item(Gtk, base_label: str, is_on: bool, on_toggled):
+    """Build a CheckMenuItem whose label tracks its on/off state."""
+    item = Gtk.CheckMenuItem(label=_tick_label(base_label, is_on))
+    item.set_active(is_on)
+
+    def _on_toggled(widget, _base=base_label, _cb=on_toggled):
+        on = widget.get_active()
+        widget.set_label(_tick_label(_base, on))
+        _cb(on)
+
+    item.connect("toggled", _on_toggled)
+    return item
+
+
 class TrayManager:
     def __init__(self, config: AppConfig, paste_engine: PasteEngine, on_exit=None):
         self.config = config
@@ -132,9 +159,9 @@ class TrayManager:
         menu.append(Gtk.SeparatorMenuItem())
 
         # Active Toggle
-        item_active = Gtk.CheckMenuItem(label=I18n.get("tray_active"))
-        item_active.set_active(self.paste_engine.enabled)
-        item_active.connect("toggled", lambda w: self.toggle_enabled(w.get_active()))
+        item_active = _make_check_item(
+            Gtk, I18n.get("tray_active"), self.paste_engine.enabled, self.toggle_enabled
+        )
         menu.append(item_active)
         menu.append(Gtk.SeparatorMenuItem())
 
@@ -160,27 +187,39 @@ class TrayManager:
         set_menu = Gtk.Menu()
 
         # Overwrite
-        item_ow = Gtk.CheckMenuItem(label=I18n.get("tray_overwrite"))
-        item_ow.set_active(self.config.overwrite_existing_text)
-        item_ow.connect("toggled", lambda w: self.toggle_overwrite(w.get_active()))
+        item_ow = _make_check_item(
+            Gtk,
+            I18n.get("tray_overwrite"),
+            self.config.overwrite_existing_text,
+            self.toggle_overwrite,
+        )
         set_menu.append(item_ow)
 
         # Auto Hover
-        item_ah = Gtk.CheckMenuItem(label=I18n.get("tray_auto_hover"))
-        item_ah.set_active(self.config.auto_paste_on_hover)
-        item_ah.connect("toggled", lambda w: self.toggle_auto_hover(w.get_active()))
+        item_ah = _make_check_item(
+            Gtk,
+            I18n.get("tray_auto_hover"),
+            self.config.auto_paste_on_hover,
+            self.toggle_auto_hover,
+        )
         set_menu.append(item_ah)
 
         # Sound Enable
-        item_snd = Gtk.CheckMenuItem(label=I18n.get("tray_sound_enable"))
-        item_snd.set_active(self.config.play_tap_sound)
-        item_snd.connect("toggled", lambda w: self.toggle_sound(w.get_active()))
+        item_snd = _make_check_item(
+            Gtk,
+            I18n.get("tray_sound_enable"),
+            self.config.play_tap_sound,
+            self.toggle_sound,
+        )
         set_menu.append(item_snd)
 
         # Auto QR
-        item_aqr = Gtk.CheckMenuItem(label=I18n.get("tray_auto_qr"))
-        item_aqr.set_active(self.config.qr_auto_show_on_refresh)
-        item_aqr.connect("toggled", lambda w: self.toggle_auto_qr(w.get_active()))
+        item_aqr = _make_check_item(
+            Gtk,
+            I18n.get("tray_auto_qr"),
+            self.config.qr_auto_show_on_refresh,
+            self.toggle_auto_qr,
+        )
         set_menu.append(item_aqr)
 
         item_settings.set_submenu(set_menu)
