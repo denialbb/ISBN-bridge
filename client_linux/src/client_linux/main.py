@@ -122,28 +122,19 @@ def main():
 
     stop_event = threading.Event()
 
-    # 5. Shutdown handler
-    def cleanup(*_):
-        Logger.log("Shutting down ISBN Bridge Linux client...")
-        try:
-            QRModal.hide()
-        except Exception:
-            pass
-        paste_engine.shutdown()
-        listener.shutdown()
-        ServerManager.shutdown(config)
-        try:
-            tray.stop()
-        except Exception:
-            pass
+    # Shutdown orchestration: request_shutdown() is safe from any thread
+    # (tray menu callback, signal handler) — it only signals. The ordered
+    # teardown below runs in the main thread, so the interpreter never
+    # finalizes while the GTK loop thread is still alive (that segfaults
+    # in Py_Exit and systemd restarts us on the resulting core dump).
+    def request_shutdown(*_):
         stop_event.set()
-        sys.exit(0)
 
-    signal.signal(signal.SIGINT, cleanup)
-    signal.signal(signal.SIGTERM, cleanup)
+    signal.signal(signal.SIGINT, request_shutdown)
+    signal.signal(signal.SIGTERM, request_shutdown)
 
     # 6. Tray Manager
-    tray = TrayManager(config, paste_engine, on_exit=cleanup)
+    tray = TrayManager(config, paste_engine, on_exit=request_shutdown)
     tray.start()
 
     # 7. Notify active
@@ -158,7 +149,31 @@ def main():
         while not stop_event.is_set():
             stop_event.wait(1.0)
     except KeyboardInterrupt:
-        cleanup()
+        pass
+
+    # 10. Ordered teardown in the main thread -> exit code 0, no restart.
+    # Each step is guarded: a teardown exception must never turn into a
+    # non-zero exit (systemd would restart us on it).
+    Logger.log("Shutting down ISBN Bridge Linux client...")
+    for step in (
+        QRModal.hide,
+        paste_engine.shutdown,
+        listener.shutdown,
+        lambda: ServerManager.shutdown(config),
+    ):
+        try:
+            step()
+        except Exception as e:
+            Logger.log(f"Shutdown step failed: {e}")
+    time.sleep(0.2)  # let the hide land on the GTK loop before quitting it
+    try:
+        tray.stop()
+    except Exception:
+        pass
+    try:
+        tray.join(timeout=5.0)
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

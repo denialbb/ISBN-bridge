@@ -316,6 +316,16 @@ class TrayManager:
         except Exception:
             pass
 
+    def join(self, timeout: float = 5.0) -> None:
+        """Wait for the tray loop thread to finish (never join self)."""
+        thread, self._thread = self._thread, None
+        if (
+            thread is not None
+            and thread.is_alive()
+            and thread is not threading.current_thread()
+        ):
+            thread.join(timeout)
+
     def exit_app(self) -> None:
         self.stop()
         if self.on_exit:

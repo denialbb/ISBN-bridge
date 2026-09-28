@@ -59,6 +59,67 @@ def test_tray_toggle_actions():
     exit_mock.assert_called_once()
 
 
+def test_exit_app_from_tray_thread_does_not_raise():
+    """The Exit menu item runs in the GTK thread: it must only request
+    shutdown (SystemExit there would skip main-thread teardown and the
+    interpreter can segfault while the loop thread is still alive)."""
+    import threading
+
+    cfg = AppConfig()
+    engine = PasteEngine(cfg)
+    exit_mock = MagicMock()
+    tray = TrayManager(cfg, engine, on_exit=exit_mock)
+
+    errors = []
+    t = threading.Thread(target=lambda: _guard(tray.exit_app, errors), daemon=True)
+    t.start()
+    t.join(timeout=5.0)
+    assert not t.is_alive()
+    assert not errors, errors[0]
+    exit_mock.assert_called_once()
+
+
+def _guard(fn, errors):
+    try:
+        fn()
+    except BaseException as e:  # noqa: BLE001 - surfaced via assert
+        errors.append(e)
+
+
+def test_join_without_thread_returns():
+    cfg = AppConfig()
+    tray = TrayManager(cfg, PasteEngine(cfg))
+    tray.join(timeout=0.1)  # must not raise
+
+
+def test_join_waits_for_loop_thread():
+    import threading
+
+    cfg = AppConfig()
+    tray = TrayManager(cfg, PasteEngine(cfg))
+    thread = MagicMock()
+    thread.is_alive.return_value = True
+    tray._thread = thread
+    tray.join(timeout=3.0)
+    thread.join.assert_called_once_with(3.0)
+    assert tray._thread is None
+
+
+def test_join_from_loop_thread_itself_never_blocks():
+    import threading
+    from unittest.mock import patch
+
+    cfg = AppConfig()
+    tray = TrayManager(cfg, PasteEngine(cfg))
+    thread = MagicMock()
+    thread.is_alive.return_value = True
+    tray._thread = thread
+    with patch.object(threading, "current_thread", return_value=thread):
+        tray.join(timeout=3.0)
+    thread.join.assert_not_called()
+    assert tray._thread is None
+
+
 def _install_fake_appindicator(monkeypatch):
     """Fake AyatanaAppIndicator3 + Gtk so tray wiring runs headless."""
     indicator = MagicMock(name="Indicator")
