@@ -84,12 +84,12 @@ class TrayManager:
             menu = self._build_gtk_menu(Gtk)
             self.indicator.set_menu(menu)
 
-            # Left click / activate -> show QR code modal
-            try:
-                self.indicator.connect("activate", self._on_indicator_activate)
-            except Exception as e:
-                Logger.log(f"TrayManager: activate signal not supported: {e}")
-
+            # Click handling (StatusNotifierItem semantics):
+            # - ContextMenu (right click) opens the menu set above.
+            # - Activate (left/middle click) triggers the secondary target
+            #   below, i.e. the "Show QR" item. AyatanaAppIndicator3 exposes
+            #   no "activate" signal on Indicator, so there is nothing else
+            #   to connect here.
             if hasattr(self, "_item_qr") and self._item_qr:
                 try:
                     self.indicator.set_secondary_activate_target(self._item_qr)

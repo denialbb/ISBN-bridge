@@ -1,0 +1,21 @@
+# Example custom QR card scheme (Matrix phosphor).
+#
+# Drop-in layout: <config-dir>/themes/<name>/colors.toml
+#   Linux   : ~/.config/isbn-bridge/themes/<name>/colors.toml
+#   Windows : <folder with scanner.conf>\themes\<name>\colors.toml
+# Then set  theme = <name>  under [QRCode] in scanner.conf.
+# A direct file path also works:  theme = C:\path\to\mine.toml
+#
+# Recognized keys: mode ("dark"/"light", else inferred from background),
+# accent, background, foreground, green, dark_foreground.
+
+mode = "dark"
+
+accent = "#3CBF5C"
+selection = "#143318"
+muted = "#3A6840"
+
+background = "#080C09"
+foreground = "#8BC98C"
+
+green = "#2D9A48"

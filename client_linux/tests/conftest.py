@@ -7,3 +7,4 @@ def silence_desktop_feedback(monkeypatch):
     monkeypatch.setenv("ISBN_BRIDGE_NO_NOTIFY", "1")
     monkeypatch.setenv("ISBN_BRIDGE_NO_SOUND", "1")
     monkeypatch.setenv("ISBN_BRIDGE_NO_TYPING", "1")
+    monkeypatch.setenv("ISBN_BRIDGE_NO_HYPRLAND", "1")

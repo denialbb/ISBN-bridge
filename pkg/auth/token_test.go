@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"image/color"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -277,5 +278,64 @@ func TestQRRecolorBrandInk(t *testing.T) {
 	}
 	if white == 0 {
 		t.Error("expected white background to survive recoloring")
+	}
+}
+
+func TestParseHexColor(t *testing.T) {
+	fb := color.RGBA{R: 1, G: 2, B: 3, A: 255}
+	cases := []struct {
+		in   string
+		want color.RGBA
+	}{
+		{"3CBF5C", color.RGBA{R: 0x3C, G: 0xBF, B: 0x5C, A: 255}},
+		{"#080C09", color.RGBA{R: 0x08, G: 0x0C, B: 0x09, A: 255}},
+		{"fff", color.RGBA{R: 255, G: 255, B: 255, A: 255}},
+		{"  2F4A6E  ", color.RGBA{R: 0x2F, G: 0x4A, B: 0x6E, A: 255}},
+		{"red", fb},
+		{"12345", fb},
+		{"1234567", fb},
+		{"ZZZZZZ", fb},
+		{"", fb},
+	}
+	for _, tc := range cases {
+		if got := ParseHexColor(tc.in, fb); got != tc.want {
+			t.Errorf("ParseHexColor(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestGenerateQRCodePNGWithColors(t *testing.T) {
+	mgr := NewTokenManager(filepath.Join(t.TempDir(), "token.txt"), time.Hour)
+	mgr.SetBaseURL("http://192.168.1.107:8765")
+	ink := color.RGBA{R: 0x3C, G: 0xBF, B: 0x5C, A: 255}
+	bg := color.RGBA{R: 0x08, G: 0x0C, B: 0x09, A: 255}
+	out, err := mgr.GenerateQRCodePNGWithColors(ink, bg)
+	if err != nil {
+		t.Fatalf("failed to generate themed QR: %v", err)
+	}
+	img, err := png.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatalf("themed QR is not a valid PNG: %v", err)
+	}
+	bounds := img.Bounds()
+	var accent, other int
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			switch {
+			case r>>8 == 0x3C && g>>8 == 0xBF && b>>8 == 0x5C:
+				accent++
+			case r>>8 == 0x08 && g>>8 == 0x0C && b>>8 == 0x09:
+				// themed background
+			default:
+				other++
+			}
+		}
+	}
+	if accent == 0 {
+		t.Error("expected accent modules in themed QR, found none")
+	}
+	if other != 0 {
+		t.Errorf("expected only accent/background pixels, found %d others", other)
 	}
 }

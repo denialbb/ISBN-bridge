@@ -4,6 +4,8 @@ import io
 import json
 import os
 from pathlib import Path
+import re
+import shutil
 import subprocess
 import threading
 import time
@@ -15,6 +17,7 @@ from client_linux.config import AppConfig
 from client_linux.i18n import I18n
 from client_linux.logger import Logger
 from client_linux.server_manager import ServerManager
+from client_linux.theme import load_card_palette, recolor_brand, recolor_qr
 
 
 def _has_gtk() -> bool:
@@ -41,6 +44,9 @@ def _has_tkinter() -> bool:
 
 
 class QRModal:
+    #: Window title shared by the GTK modal and the Hyprland float rule.
+    QR_TITLE = "ISBN Bridge - Pairing QR"
+
     _gtk_window = None
     _gtk_timer_id = None
 
@@ -50,7 +56,10 @@ class QRModal:
     _brand_photo = None
     _qr_photo = None
 
-    _lock = threading.Lock()
+    # RLock: _show_gtk/_show_tk call _hide_gtk/_hide_tk while holding the
+    # lock. A plain Lock deadlocks the GTK thread here, freezing the tray
+    # menu and all click handling on the first QR show.
+    _lock = threading.RLock()
 
     @classmethod
     def set_root(cls, root) -> None:
@@ -120,18 +129,20 @@ class QRModal:
             return None
 
     @classmethod
-    def _find_brand_asset(cls) -> Optional[Path]:
-        pkg_brand = Path(__file__).resolve().parent / "assets" / "brand.png"
+    def _find_brand_asset(cls, name: str = "brand.png") -> Optional[Path]:
+        pkg_brand = Path(__file__).resolve().parent / "assets" / name
         repo_root = Path(__file__).resolve().parent.parent.parent.parent
         candidates = [
             pkg_brand,
-            repo_root / "client" / "assets" / "brand.png",
-            Path.cwd() / "client" / "assets" / "brand.png",
-            Path("client/assets/brand.png"),
+            repo_root / "client" / "assets" / name,
+            Path.cwd() / "client" / "assets" / name,
+            Path(f"client/assets/{name}"),
         ]
         for c in candidates:
             if c.is_file():
                 return c.resolve()
+        if name != "brand.png":
+            return cls._find_brand_asset("brand.png")
         return None
 
     @classmethod
@@ -161,11 +172,58 @@ class QRModal:
     # -------------------------------------------------------------------------
 
     @classmethod
+    def _ensure_hyprland_float_rule(cls) -> None:
+        """Ask Hyprland (if running) to open the QR popup floating + centered.
+
+        GTK cannot position windows on Wayland: set_position(CENTER) is an
+        X11-only hint, so without a compositor rule the modal gets tiled.
+        Registers a session-scoped named rule before the window is mapped;
+        re-applying the same name is idempotent. Best-effort: never raises.
+        """
+        try:
+            if os.environ.get("ISBN_BRIDGE_NO_HYPRLAND"):
+                return
+            if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+                return
+            hyprctl = shutil.which("hyprctl")
+            if not hyprctl:
+                return
+            # re.escape also escapes space/hyphen; those are literal and
+            # clearer unescaped (and safer across regex flavors).
+            title_re = "^" + re.escape(cls.QR_TITLE).replace(r"\ ", " ").replace(r"\-", "-") + "$"
+            lua = (
+                'hl.window_rule({ name = "isbn-bridge-qr", '
+                f'match = {{ title = "{title_re}" }}, '
+                "float = true, center = true })"
+            )
+            r = subprocess.run(
+                [hyprctl, "eval", lua],
+                capture_output=True, text=True, timeout=2.0,
+            )
+            if r.returncode == 0:
+                return
+            # Pre-Lua Hyprland: legacy windowrulev2 keywords.
+            for rule in ("float", "center"):
+                subprocess.run(
+                    [hyprctl, "keyword", "windowrulev2", f"{rule}, title:{title_re}"],
+                    capture_output=True, text=True, timeout=2.0,
+                )
+        except Exception as e:
+            Logger.log(f"QRModal: Hyprland float rule not applied: {e}")
+
+    @classmethod
     def _show_gtk(cls, config: AppConfig) -> bool:
         with cls._lock:
             cls._hide_gtk()
 
             from gi.repository import Gtk, Gdk, GdkPixbuf, GLib
+            try:
+                import gi as _gi
+
+                _gi.require_version("Pango", "1.0")
+                from gi.repository import Pango
+            except Exception:
+                Pango = None
 
             # 1. Fetch QR directly from local Go backend in memory (auto-start server if needed)
             orig_qr = cls._fetch_qr_image(config.go_server_url)
@@ -178,13 +236,32 @@ class QRModal:
 
             size = config.qr_popup_size
 
+            # Card palette: "auto" follows the Omarchy theme (negative card on
+            # dark themes), "default" is the classic white/navy card, a theme
+            # name forces it ("matrix"), and a themes/ dir next to
+            # scanner.conf provides custom schemes (non-Omarchy / Windows).
+            try:
+                conf_themes = Path(config.file_path).parent / "themes"
+            except Exception:
+                conf_themes = Path("themes")
+            palette = load_card_palette(getattr(config, "qr_theme", "auto"), [conf_themes])
+            if palette.dark:
+                orig_qr = recolor_qr(orig_qr, palette.qr_ink, palette.background)
+
             # 2. Compose brand image and QR code using PIL
-            brand_path = cls._find_brand_asset()
+            brand_path = cls._find_brand_asset(palette.brand_asset)
             brand_img = None
             brand_h = 0
             if brand_path and brand_path.is_file():
                 try:
                     orig_brand = Image.open(brand_path)
+                    if palette.dark:
+                        try:
+                            # Logo follows the theme accent; on failure the
+                            # shipped brand-dark.png colors are kept.
+                            orig_brand = recolor_brand(orig_brand, palette.qr_ink)
+                        except Exception as e:
+                            Logger.log(f"QRModal: brand recolor failed: {e}")
                     brand_h = max(20, (size * 55) // 516)
                     brand_img = orig_brand.resize((size, brand_h), Image.Resampling.LANCZOS)
                 except Exception as e:
@@ -193,10 +270,11 @@ class QRModal:
             qr_img = orig_qr.resize((size, size), Image.Resampling.NEAREST)
 
             total_w = size
-            spacing = 8 if brand_img else 0
+            # AHK card: brand then y+2 gap then QR.
+            spacing = 2 if brand_img else 0
             total_h = (brand_h + spacing + size) if brand_img else size
 
-            canvas = Image.new("RGBA", (total_w, total_h), (255, 255, 255, 255))
+            canvas = Image.new("RGBA", (total_w, total_h), palette.background + (255,))
             if brand_img:
                 mask = brand_img if brand_img.mode == "RGBA" else None
                 canvas.paste(brand_img, (0, 0), mask)
@@ -209,20 +287,32 @@ class QRModal:
 
             # 3. Create GTK window
             win = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
-            win.set_title("ISBN Bridge - Pairing QR")
+            win.set_title(cls.QR_TITLE)
             win.set_decorated(False)
+            win.set_resizable(False)
             win.set_position(Gtk.WindowPosition.CENTER)
             win.set_keep_above(True)
             win.set_skip_taskbar_hint(True)
             win.set_skip_pager_hint(True)
             win.set_type_hint(Gdk.WindowTypeHint.DIALOG)
+            # Content-sized request: margins (16+16) + vbox padding. Floating
+            # compositors honor this; tiling ones stretch it (see float rule).
+            win.set_default_size(total_w + 32, total_h + 40)
+
+            # Wayland compositors tile unknown windows: register the float rule
+            # before mapping so the modal opens floating and centered.
+            cls._ensure_hyprland_float_rule()
 
             event_box = Gtk.EventBox()
-            event_box.override_background_color(Gtk.StateFlags.NORMAL, Gdk.RGBA(1, 1, 1, 1))
+            bg = palette.background
+            event_box.override_background_color(
+                Gtk.StateFlags.NORMAL, Gdk.RGBA(bg[0] / 255, bg[1] / 255, bg[2] / 255, 1))
 
-            vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-            vbox.set_margin_top(16)
-            vbox.set_margin_bottom(12)
+            # Card metrics mirror the AutoHotkey popup (client/lib/ui_qr.ahk):
+            # MarginX 16 / MarginY 6, brand at y+2, QR at y+2, hint at y+8.
+            vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+            vbox.set_margin_top(6)
+            vbox.set_margin_bottom(6)
             vbox.set_margin_start(16)
             vbox.set_margin_end(16)
 
@@ -231,12 +321,22 @@ class QRModal:
             loader.close()
             pixbuf = loader.get_pixbuf()
             gtk_img = Gtk.Image.new_from_pixbuf(pixbuf)
+            gtk_img.set_margin_top(2)
             vbox.pack_start(gtk_img, False, False, 0)
 
             hint_text = I18n.get("qr_hint")
             hint_label = Gtk.Label(label=hint_text)
-            hint_label.override_color(Gtk.StateFlags.NORMAL, Gdk.RGBA(0.18, 0.29, 0.43, 1))
-            vbox.pack_start(hint_label, False, False, 4)
+            fg = palette.foreground
+            hint_label.override_color(
+                Gtk.StateFlags.NORMAL, Gdk.RGBA(fg[0] / 255, fg[1] / 255, fg[2] / 255, 1))
+            if Pango is not None:
+                try:
+                    # AHK: SetFont("s8 norm c2F4A6E", "Tahoma")
+                    hint_label.modify_font(Pango.FontDescription.from_string("Tahoma 8"))
+                except Exception as e:
+                    Logger.log(f"QRModal: cannot set hint font: {e}")
+            hint_label.set_margin_top(8)
+            vbox.pack_start(hint_label, False, False, 0)
 
             event_box.add(vbox)
             win.add(event_box)

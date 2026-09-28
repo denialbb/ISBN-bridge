@@ -16,6 +16,7 @@ class AppConfig {
     static qrAutoShowOnRefresh := true
     static qrAutoHideSeconds := 45
     static qrPopupSize := 280
+    static qrTheme := "auto"
     static language := "auto"
     static hideConsole := true
 
@@ -54,6 +55,7 @@ class AppConfig {
         this.qrAutoShowOnRefresh := (IniRead(this.filePath, "QRCode", "auto_show_on_refresh", "true") = "true")
         this.qrAutoHideSeconds := Integer(IniRead(this.filePath, "QRCode", "auto_hide_seconds", 45))
         this.qrPopupSize := Integer(IniRead(this.filePath, "QRCode", "popup_size", 280))
+        this.qrTheme := IniRead(this.filePath, "QRCode", "theme", "auto")
         this.language := IniRead(this.filePath, "UI", "language", "auto")
     }
 

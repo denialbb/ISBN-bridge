@@ -1,6 +1,8 @@
 """Tests for Linux TrayManager."""
 
 import sys
+import types
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from client_linux.config import AppConfig
@@ -55,3 +57,64 @@ def test_tray_toggle_actions():
 
     tray.exit_app()
     exit_mock.assert_called_once()
+
+
+def _install_fake_appindicator(monkeypatch):
+    """Fake AyatanaAppIndicator3 + Gtk so tray wiring runs headless."""
+    indicator = MagicMock(name="Indicator")
+    appindicator = SimpleNamespace(
+        Indicator=SimpleNamespace(
+            new=MagicMock(return_value=indicator),
+            new_with_path=MagicMock(return_value=indicator),
+        ),
+        IndicatorCategory=SimpleNamespace(APPLICATION_STATUS=0),
+        IndicatorStatus=SimpleNamespace(ACTIVE=0),
+    )
+    Gtk = MagicMock(name="Gtk")
+    # Distinct widget per constructor call so identity assertions are meaningful.
+    menus = []
+    Gtk.Menu.side_effect = lambda *a, **k: menus.append(MagicMock(name="Menu")) or menus[-1]
+    Gtk.MenuItem.side_effect = lambda *a, **k: MagicMock(name="MenuItem")
+    Gtk.CheckMenuItem.side_effect = lambda *a, **k: MagicMock(name="CheckMenuItem")
+    Gtk.SeparatorMenuItem.side_effect = lambda *a, **k: MagicMock(name="Separator")
+
+    repo = types.ModuleType("gi.repository")
+    repo.AyatanaAppIndicator3 = appindicator
+    repo.Gtk = Gtk
+    gi_mod = types.ModuleType("gi")
+    gi_mod.require_version = MagicMock()
+    gi_mod.repository = repo
+    monkeypatch.setitem(sys.modules, "gi", gi_mod)
+    monkeypatch.setitem(sys.modules, "gi.repository", repo)
+    return appindicator, Gtk, indicator, menus
+
+
+def test_start_wires_menu_and_click_targets(monkeypatch):
+    """Right click must get the menu; left/middle click must target Show-QR.
+
+    AyatanaAppIndicator3.Indicator has no "activate" signal: the SNI
+    Activate action is delivered via the secondary-activate target, so the
+    tray must not rely on connecting to a nonexistent signal.
+    """
+    appindicator, Gtk, indicator, menus = _install_fake_appindicator(monkeypatch)
+    cfg = AppConfig()
+    engine = PasteEngine(cfg)
+    tray = TrayManager(cfg, engine)
+
+    tray.start()
+    tray._thread.join(timeout=5.0)
+    assert not tray._thread.is_alive()
+
+    assert appindicator.Indicator.new.call_count + appindicator.Indicator.new_with_path.call_count == 1
+    indicator.set_status.assert_called_once()
+    top_menu = indicator.set_menu.call_args.args[0]
+    assert top_menu in menus
+    top_menu.show_all.assert_called_once()
+    # Left/middle-click target is the Show-QR item from the menu.
+    indicator.set_secondary_activate_target.assert_called_once_with(tray._item_qr)
+    # No reliance on the nonexistent Indicator "activate" signal.
+    activate_connects = [
+        c for c in indicator.connect.call_args_list if c.args and c.args[0] == "activate"
+    ]
+    assert activate_connects == []
+    Gtk.main.assert_called_once()

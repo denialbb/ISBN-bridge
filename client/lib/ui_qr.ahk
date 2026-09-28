@@ -15,11 +15,19 @@ class QRModal {
         }
 
         Logger.Log("QRModal.Show invoked")
+
+        ; Themed card: dark palettes fetch an accent-on-dark QR from the
+        ; server (?ink=&bg=), light/default palettes use the classic QR.
+        palette := QRTheme.Load(AppConfig.qrTheme)
+        qrUrl := AppConfig.goServerUrl "/qr.png"
+        if (palette["dark"])
+            qrUrl .= "?ink=" palette["ink"] "&bg=" palette["bg"]"
+
         tempQR := A_Temp "\isbn_bridge_qr_" Random(100000, 999999) "_" A_TickCount ".png"
-        if !this.TryDownload(tempQR) {
+        if !this.TryDownload(tempQR, 0, qrUrl) {
             ; Server may be down: (re)start it, then retry once before
             ; giving up with an error notification.
-            if ServerManager.EnsureRunning() && this.TryDownload(tempQR, 400)
+            if ServerManager.EnsureRunning() && this.TryDownload(tempQR, 400, qrUrl)
                 Logger.Log("QRModal download succeeded after server restart")
             else {
                 TrayTip(I18n.Get("qr_download_error"), I18n.Get("app_title"), "Iconx")
@@ -29,14 +37,16 @@ class QRModal {
 
         ; Ultra-minimal, borderless floating QR card
         this.guiInstance := Gui("+AlwaysOnTop -Caption +Border +ToolWindow", I18n.Get("app_title"))
-        this.guiInstance.BackColor := "0xFFFFFF"
+        this.guiInstance.BackColor := "0x" palette["bg"]
         this.guiInstance.MarginX := 16
         this.guiInstance.MarginY := 6
 
         size := AppConfig.qrPopupSize
 
         ; Brand artwork, padded sides: all gaps controlled here
-        brandPath := A_ScriptDir "\assets\brand.png"
+        brandPath := A_ScriptDir "\assets\" palette["brand"]
+        if !FileExist(brandPath)
+            brandPath := A_ScriptDir "\assets\brand.png"
         if FileExist(brandPath) {
             ; Artwork is 516x55, displayed at QR width
             brandCtrl := this.guiInstance.Add("Picture", "w" size " h" (size * 55 // 516) " Center y+2", brandPath)
@@ -54,8 +64,8 @@ class QRModal {
             Logger.Log("QRModal temp cleanup failed: " err.Message)
         }
 
-        ; Minimal single-line hint, matched to brand ink
-        this.guiInstance.SetFont("s8 norm c2F4A6E", "Tahoma")
+        ; Minimal single-line hint, matched to card theme
+        this.guiInstance.SetFont("s8 norm c" palette["fg"], "Tahoma")
         hintCtrl := this.guiInstance.Add("Text", "Center w" size " y+8", I18n.Get("qr_hint"))
         hintCtrl.OnEvent("Click", (*) => this.Hide())
 
@@ -70,11 +80,13 @@ class QRModal {
             SetTimer(this.autoHideTimer, -AppConfig.qrAutoHideSeconds * 1000)
     }
 
-    static TryDownload(tempQR, delay := 0) {
+    static TryDownload(tempQR, delay := 0, url := "") {
         if delay
             Sleep(delay)
+        if (url = "")
+            url := AppConfig.goServerUrl "/qr.png"
         try {
-            Download(AppConfig.goServerUrl "/qr.png", tempQR)
+            Download(url, tempQR)
             return true
         } catch as err {
             Logger.Log("QRModal download failed: " err.Message)

@@ -1,9 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"image/png"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -442,5 +444,58 @@ func TestPairHidesQRForMobile(t *testing.T) {
 	defer forwarder.mu.Unlock()
 	if forwarder.hideQRCount != 1 {
 		t.Errorf("expected no extra HideQR for desktop UA, got %d", forwarder.hideQRCount)
+	}
+}
+
+func TestGetQRCodePNGThemed(t *testing.T) {
+	srv, _, _ := setupTestServer(t)
+
+	req := httptest.NewRequest("GET", "/qr.png?ink=3CBF5C&bg=080C09", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", rec.Code)
+	}
+	img, err := png.Decode(bytes.NewReader(rec.Body.Bytes()))
+	if err != nil {
+		t.Fatalf("themed QR is not a valid PNG: %v", err)
+	}
+	bounds := img.Bounds()
+	var accent, other int
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			switch {
+			case r>>8 == 0x3C && g>>8 == 0xBF && b>>8 == 0x5C:
+				accent++
+			case r>>8 == 0x08 && g>>8 == 0x0C && b>>8 == 0x09:
+				// themed background
+			default:
+				other++
+			}
+		}
+	}
+	if accent == 0 {
+		t.Error("expected accent modules with ink/bg params, found none")
+	}
+	if other != 0 {
+		t.Errorf("expected only accent/background pixels, found %d others", other)
+	}
+}
+
+func TestGetQRCodePNGInvalidParamsFallBack(t *testing.T) {
+	srv, _, _ := setupTestServer(t)
+
+	for _, target := range []string{"/qr.png?ink=zzz&bg=080C09", "/qr.png?ink=3CBF5C&bg=toolong123", "/qr.png"} {
+		req := httptest.NewRequest("GET", target, nil)
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("%s: expected 200 OK, got %d", target, rec.Code)
+		}
+		if _, err := png.Decode(bytes.NewReader(rec.Body.Bytes())); err != nil {
+			t.Errorf("%s: expected valid PNG, got error %v", target, err)
+		}
 	}
 }

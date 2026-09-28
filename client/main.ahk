@@ -8,6 +8,7 @@ CoordMode("Mouse", "Screen")
 #Include "lib/config.ahk"
 #Include "lib/i18n.ahk"
 #Include "lib/logger.ahk"
+#Include "lib/theme.ahk"
 
 ; Catch and log any unhandled runtime exceptions
 OnError((err, mode) => (Logger.Log("UNHANDLED ERROR: " err.Message " at line " err.Line " in " err.File), 0))

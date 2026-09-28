@@ -26,6 +26,7 @@ class AppConfig:
         self.qr_auto_show_on_refresh: bool = True
         self.qr_auto_hide_seconds: int = 45
         self.qr_popup_size: int = 280
+        self.qr_theme: str = "auto"
         self.language: str = "auto"
 
         self.load()
@@ -85,6 +86,8 @@ class AppConfig:
             self.qr_auto_show_on_refresh = parser.getboolean("QRCode", "auto_show_on_refresh", fallback=self.qr_auto_show_on_refresh)
             self.qr_auto_hide_seconds = parser.getint("QRCode", "auto_hide_seconds", fallback=self.qr_auto_hide_seconds)
             self.qr_popup_size = parser.getint("QRCode", "popup_size", fallback=self.qr_popup_size)
+            # auto = follow Omarchy theme, default = classic card, <name> = force theme
+            self.qr_theme = parser.get("QRCode", "theme", fallback=self.qr_theme).strip().lower() or "auto"
 
         if parser.has_section("UI"):
             self.language = parser.get("UI", "language", fallback=self.language).strip()

@@ -272,7 +272,13 @@ func normalizeSignature(authHeader string) string {
 }
 
 func (s *Server) handleGetQRPNG(w http.ResponseWriter, r *http.Request) {
-	png, err := s.tokenMgr.GenerateQRCodePNG()
+	// Optional themed rendering for desktop clients (e.g. ?ink=3CBF5C&bg=080C09
+	// for a negative card on dark themes). Invalid values fall back to brand
+	// defaults so pairing never breaks. The /qr HTML page keeps defaults.
+	q := r.URL.Query()
+	ink := auth.ParseHexColor(q.Get("ink"), auth.QRModuleInk())
+	bg := auth.ParseHexColor(q.Get("bg"), auth.QRPaper())
+	png, err := s.tokenMgr.GenerateQRCodePNGWithColors(ink, bg)
 	if err != nil {
 		http.Error(w, "Failed to generate QR code: "+err.Error(), http.StatusInternalServerError)
 		return
