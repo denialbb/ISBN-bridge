@@ -2,7 +2,7 @@
 Name=ISBN Bridge
 GenericName=Barcode Scanner Bridge
 Comment=Bridge mobile barcode scanning directly to PC input fields
-Exec=isbn-bridge
+Exec=isbn-bridge-client
 Icon=isbn-bridge
 Terminal=false
 Type=Application

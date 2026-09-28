@@ -16,6 +16,7 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 
 rm -f "$BIN_DIR/isbn-bridge-server"
+rm -f "$BIN_DIR/isbn-bridge-client"
 rm -f "$BIN_DIR/isbn-bridge"
 rm -rf "$DATA_DIR"
 rm -f "$APPS_DIR/isbn-bridge.desktop"

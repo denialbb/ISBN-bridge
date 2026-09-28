@@ -41,8 +41,9 @@ else
     fi
 fi
 
-# 3. Install runner script
-install -m 755 "$SCRIPT_DIR/isbn-bridge" "$BIN_DIR/isbn-bridge"
+# 3. Install runner script (remove legacy non-descriptive name if present)
+rm -f "$BIN_DIR/isbn-bridge"
+install -m 755 "$SCRIPT_DIR/isbn-bridge-client" "$BIN_DIR/isbn-bridge-client"
 
 # 4. Install icons
 if [[ -f "$SCRIPT_DIR/assets/tray.png" ]]; then
@@ -75,6 +76,6 @@ fi
 
 echo ""
 echo "Installation complete!"
-echo "- Run directly:        $BIN_DIR/isbn-bridge"
+echo "- Run directly:        $BIN_DIR/isbn-bridge-client"
 echo "- Enable at login:     systemctl --user enable --now isbn-bridge.service"
 echo "- Desktop application: Available in your application launcher (ISBN Bridge)"

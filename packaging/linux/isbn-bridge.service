@@ -6,7 +6,7 @@ PartOf=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/isbn-bridge
+ExecStart=%h/.local/bin/isbn-bridge-client
 WorkingDirectory=%h/.config/isbn-bridge
 Restart=on-failure
 RestartSec=3

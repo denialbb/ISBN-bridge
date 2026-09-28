@@ -1,4 +1,4 @@
-VERSION ?= 1.1.0
+VERSION ?= 1.1.1
 RELEASE_NAME := ISBN-Bridge-v$(VERSION)-linux-x64
 DIST_DIR := dist
 STAGE_DIR := $(DIST_DIR)/$(RELEASE_NAME)
@@ -39,7 +39,7 @@ release-linux: build-linux wheel
 	cp client_linux/dist/*.whl $(STAGE_DIR)/dist/
 	cp client_linux/dist/*.tar.gz $(STAGE_DIR)/dist/ 2>/dev/null || true
 	cp client_linux/src/client_linux/assets/* $(STAGE_DIR)/assets/
-	cp packaging/linux/isbn-bridge $(STAGE_DIR)/
+	cp packaging/linux/isbn-bridge-client $(STAGE_DIR)/
 	cp packaging/linux/isbn-bridge.desktop $(STAGE_DIR)/
 	cp packaging/linux/isbn-bridge.service $(STAGE_DIR)/
 	cp packaging/linux/install.sh $(STAGE_DIR)/
