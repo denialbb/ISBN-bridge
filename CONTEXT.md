@@ -10,3 +10,5 @@
 - **Hover Paste**: Automatic text injection into a text field without requiring a mouse click if the cursor is already over the target window/input box.
 - **Armed State / Deferred Paste**: State when an ISBN has arrived but conditions for immediate hover paste were not met. Client waits for user click / window focus or trigger shortcut before pasting.
 - **QR Modal**: Centered desktop popup window displaying the current pairing QR code and branding artwork.
+- **IP-over-USB / Tethering**: Direct point-to-point IP link over a physical USB cable (via iOS Personal Hotspot `172.20.10.0/28` or Android USB Tethering `192.168.42.0/24`). Allows offline mobile scanning without Wi-Fi router or LAN connectivity.
+- **Dynamic Interface Resolver (`pkg/netutil`)**: Component that detects active network adapters and hot-plug events, prioritizing USB tethering over LAN when `network_mode = auto`, and dynamically updating pairing URLs and on-screen QR codes without server restart.
