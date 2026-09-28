@@ -24,6 +24,16 @@ qr.png
 # Local promo drafts (never published)
 promo/
 
+# Python & uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local handoffs & status
+.handoffs/
+.status/
+
 # OS / Editor
 .DS_Store
 Thumbs.db

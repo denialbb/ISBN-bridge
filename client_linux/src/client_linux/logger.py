@@ -1,0 +1,58 @@
+"""Timestamped file logging for ISBN Bridge."""
+
+from datetime import datetime
+import os
+from pathlib import Path
+import subprocess
+from typing import Optional
+
+
+class Logger:
+    _log_path: Optional[Path] = None
+
+    @classmethod
+    def get_log_path(cls) -> Path:
+        if cls._log_path is None:
+            # Look in current dir, repo root, or client_linux dir
+            candidates = [
+                Path("isbn-bridge-debug.log"),
+                Path(__file__).resolve().parent.parent.parent.parent / "isbn-bridge-debug.log",
+                Path.cwd() / "isbn-bridge-debug.log",
+            ]
+            for c in candidates:
+                if c.exists():
+                    cls._log_path = c.resolve()
+                    return cls._log_path
+            # Default to repo root if possible, or cwd
+            repo_root = Path(__file__).resolve().parent.parent.parent.parent
+            if (repo_root / "go.mod").exists():
+                cls._log_path = repo_root / "isbn-bridge-debug.log"
+            else:
+                cls._log_path = Path.cwd() / "isbn-bridge-debug.log"
+        return cls._log_path
+
+    @classmethod
+    def set_log_path(cls, path: Path) -> None:
+        cls._log_path = path
+
+    @classmethod
+    def log(cls, message: str) -> None:
+        path = cls.get_log_path()
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        line = f"{timestamp} | {message}\n"
+        try:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(line)
+        except OSError:
+            pass
+
+    @classmethod
+    def open_log(cls) -> None:
+        path = cls.get_log_path()
+        if not path.exists():
+            path.touch()
+        # Open in default text viewer or editor on Linux
+        try:
+            subprocess.Popen(["xdg-open", str(path)])
+        except OSError:
+            pass
