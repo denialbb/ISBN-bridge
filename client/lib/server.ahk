@@ -89,17 +89,25 @@ class HttpListener {
             this.clientStates[clientSocket] := {
                 data: "",
                 headersComplete: false,
-                contentLength: 0
+                contentLength: 0,
+                connectTick: A_TickCount
             }
         }
 
+        now := A_TickCount
         sockets := []
         for sock, state in this.clientStates
             sockets.Push(sock)
 
         for _, sock in sockets {
-            if this.clientStates.Has(sock)
-                this.PollClient(sock)
+            if !this.clientStates.Has(sock)
+                continue
+            ; 5-second deadline to prevent connection descriptor leaks
+            if (now - this.clientStates[sock].connectTick > 5000) {
+                this.CloseClient(sock)
+                continue
+            }
+            this.PollClient(sock)
         }
     }
 
@@ -208,18 +216,27 @@ class HttpListener {
         body := SubStr(request, headerEnd + 4)
         if (contentLength >= 0)
             body := SubStr(body, 1, contentLength)
-        isbn := Trim(body)
+        rawISBN := Trim(body)
 
-        if (isbn = "") {
+        if (rawISBN = "") {
             this.SendResponse(sock, 400, "Bad Request", "Missing ISBN")
             this.CloseClient(sock)
             return
         }
 
-        Logger.Log("Received verified ISBN from Go server: " isbn)
+        ; Strictly validate ISBN checksum and format before arming
+        validatedISBN := ISBNValidator.Validate(rawISBN)
+        if (validatedISBN = "") {
+            Logger.Log("Rejected invalid ISBN from local request: " rawISBN)
+            this.SendResponse(sock, 400, "Bad Request", "Invalid ISBN checksum or format")
+            this.CloseClient(sock)
+            return
+        }
+
+        Logger.Log("Received verified ISBN: " validatedISBN)
 
         try {
-            PasteEngine.Arm(isbn)
+            PasteEngine.Arm(validatedISBN)
             this.SendResponse(sock, 200, "OK", "OK")
         } catch as err {
             Logger.Log("Error arming paste engine: " err.Message)
@@ -229,8 +246,6 @@ class HttpListener {
         this.CloseClient(sock)
     }
 
-    static secretWarned := false
-
     static FindSecretFile() {
         if FileExist(A_ScriptDir "\local_secret.txt")
             return A_ScriptDir "\local_secret.txt"
@@ -239,18 +254,12 @@ class HttpListener {
         return ""
     }
 
-    ; The server rewrites local_secret.txt on every start; read it fresh
-    ; per request so a server restart needs no client restart. Missing
-    ; file (e.g. manually started server elsewhere) falls back to
-    ; localhost-only trust with a one-time warning.
+    ; Fail closed: verify secret strictly in constant time
     static HasLocalSecret(request, headerEnd) {
         path := this.FindSecretFile()
         if (path = "") {
-            if !this.secretWarned {
-                this.secretWarned := true
-                Logger.Log("Warning: local_secret.txt not found; accepting localhost requests without forwarder secret.")
-            }
-            return true
+            Logger.Log("Rejected request: local_secret.txt not found")
+            return false
         }
         try
             expected := Trim(FileRead(path, "UTF-8"))
@@ -261,8 +270,18 @@ class HttpListener {
             return false
         headers := SubStr(request, 1, headerEnd + 3)
         if RegExMatch(headers, "im)^X-ISBN-Bridge-Local:\s*(\S+)", &m)
-            return (m[1] == expected)
+            return this.ConstantTimeCompare(m[1], expected)
         return false
+    }
+
+    static ConstantTimeCompare(a, b) {
+        if StrLen(a) != StrLen(b)
+            return false
+        diff := 0
+        Loop StrLen(a) {
+            diff |= Ord(SubStr(a, A_Index, 1)) ^ Ord(SubStr(b, A_Index, 1))
+        }
+        return diff = 0
     }
 
     static SendResponse(sock, statusCode, reason, body) {

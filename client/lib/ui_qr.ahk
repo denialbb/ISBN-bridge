@@ -15,7 +15,7 @@ class QRModal {
         }
 
         Logger.Log("QRModal.Show invoked")
-        tempQR := A_Temp "\isbn_bridge_qr.png"
+        tempQR := A_Temp "\isbn_bridge_qr_" Random(100000, 999999) "_" A_TickCount ".png"
         if !this.TryDownload(tempQR) {
             ; Server may be down: (re)start it, then retry once before
             ; giving up with an error notification.

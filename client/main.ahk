@@ -15,6 +15,7 @@ OnError((err, mode) => (Logger.Log("UNHANDLED ERROR: " err.Message " at line " e
 #Include "lib/sound.ahk"
 #Include "lib/tooltip.ahk"
 #Include "lib/ui_qr.ahk"
+#Include "lib/isbn.ahk"
 #Include "lib/paste.ahk"
 #Include "lib/server.ahk"
 #Include "lib/server_manager.ahk"
