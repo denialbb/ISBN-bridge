@@ -1,11 +1,13 @@
 """Tray manager and quick actions for Linux client."""
 
+import glob
 import os
 from pathlib import Path
 import subprocess
+import sys
 import threading
 import urllib.request
-from typing import Optional
+from typing import Optional, Tuple
 
 from client_linux.config import AppConfig
 from client_linux.i18n import I18n
@@ -15,6 +17,13 @@ from client_linux.server_manager import ServerManager
 from client_linux.sound import SoundManager
 from client_linux.tooltip import Notifier
 from client_linux.ui_qr import QRModal
+
+
+def _ensure_gi():
+    """Ensure system site-packages containing PyGObject/libayatana are in sys.path."""
+    for p in sorted(glob.glob("/usr/lib/python3*/site-packages")):
+        if p not in sys.path:
+            sys.path.append(p)
 
 
 class TrayManager:
@@ -27,6 +36,7 @@ class TrayManager:
 
     def start(self) -> None:
         """Start tray indicator if supported, or log fallback."""
+        _ensure_gi()
         try:
             import gi
             gi.require_version("AyatanaAppIndicator3", "0.1")
@@ -34,8 +44,8 @@ class TrayManager:
             from gi.repository import Gtk
             self._start_appindicator(appindicator, Gtk)
             return
-        except Exception:
-            pass
+        except Exception as e:
+            Logger.log(f"TrayManager: AyatanaAppIndicator3 not available ({e})")
 
         try:
             import gi
@@ -44,20 +54,29 @@ class TrayManager:
             from gi.repository import Gtk
             self._start_appindicator(appindicator, Gtk)
             return
-        except Exception:
-            pass
+        except Exception as e:
+            Logger.log(f"TrayManager: AppIndicator3 not available ({e})")
 
         Logger.log("TrayManager: No AppIndicator runtime available; running in headless background mode")
 
     def _start_appindicator(self, appindicator, Gtk) -> None:
         def run():
-            icon_path = self._find_icon()
-            self.indicator = appindicator.Indicator.new(
-                "isbn-bridge",
-                icon_path,
-                appindicator.IndicatorCategory.APPLICATION_STATUS,
-            )
+            icon_name, theme_dir = self._find_icon()
+            if theme_dir:
+                self.indicator = appindicator.Indicator.new_with_path(
+                    "isbn-bridge",
+                    icon_name,
+                    appindicator.IndicatorCategory.APPLICATION_STATUS,
+                    theme_dir,
+                )
+            else:
+                self.indicator = appindicator.Indicator.new(
+                    "isbn-bridge",
+                    icon_name,
+                    appindicator.IndicatorCategory.APPLICATION_STATUS,
+                )
             self.indicator.set_status(appindicator.IndicatorStatus.ACTIVE)
+            self.indicator.set_title("ISBN Bridge")
             menu = self._build_gtk_menu(Gtk)
             self.indicator.set_menu(menu)
             Gtk.main()
@@ -66,17 +85,18 @@ class TrayManager:
         self._thread.start()
         Logger.log("TrayManager: AppIndicator initialized")
 
-    def _find_icon(self) -> str:
-        repo_root = Path(__file__).resolve().parent.parent.parent.parent
-        candidates = [
-            repo_root / "client" / "assets" / "tray.png",
-            repo_root / "client" / "assets" / "brand.png",
-            Path.cwd() / "client" / "assets" / "tray.png",
-        ]
-        for c in candidates:
-            if c.is_file():
-                return str(c.resolve())
-        return "input-keyboard"
+    def _find_icon(self) -> Tuple[str, Optional[str]]:
+        """Find tray icon, returning (icon_name, theme_dir)."""
+        pkg_assets = Path(__file__).resolve().parent / "assets"
+        repo_assets = Path(__file__).resolve().parent.parent.parent.parent / "client" / "assets"
+        cwd_assets = Path.cwd() / "client" / "assets"
+
+        for asset_dir in [pkg_assets, repo_assets, cwd_assets]:
+            tray_png = asset_dir / "tray.png"
+            if tray_png.is_file():
+                return ("tray", str(asset_dir.resolve()))
+
+        return ("isbn-bridge", None)
 
     def _build_gtk_menu(self, Gtk):
         menu = Gtk.Menu()
@@ -264,6 +284,14 @@ class TrayManager:
     def open_log(self) -> None:
         Logger.open_log()
 
+    def stop(self) -> None:
+        try:
+            from gi.repository import Gtk, GLib
+            GLib.idle_add(Gtk.main_quit)
+        except Exception:
+            pass
+
     def exit_app(self) -> None:
+        self.stop()
         if self.on_exit:
             self.on_exit()
