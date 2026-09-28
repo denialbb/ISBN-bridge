@@ -276,25 +276,45 @@ func TestGetQRHtml(t *testing.T) {
 }
 
 func TestPairEndpoint(t *testing.T) {
-	srv, _, _ := setupTestServer(t)
-
-	// 1. JSON response
-	req := httptest.NewRequest("GET", "/pair?format=json", nil)
-	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Header().Get("Content-Type"), "application/json") {
-		t.Errorf("expected application/json, got %s", rec.Header().Get("Content-Type"))
-	}
-	if !strings.Contains(rec.Body.String(), `"url"`) || !strings.Contains(rec.Body.String(), `"token"`) {
-		t.Errorf("expected JSON to contain url and token: %s", rec.Body.String())
+	srv, tokenMgr, _ := setupTestServer(t)
+	token, err := tokenMgr.GetToken()
+	if err != nil {
+		t.Fatalf("failed to get token: %v", err)
 	}
 
-	// 2. iOS HTML response
-	reqIOS := httptest.NewRequest("GET", "/pair", nil)
+	// 1. Unauthorized non-loopback access without token must return 401
+	reqUnauth := httptest.NewRequest("GET", "/pair?format=json", nil)
+	recUnauth := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recUnauth, reqUnauth)
+	if recUnauth.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 Unauthorized for unauthenticated LAN request, got %d", recUnauth.Code)
+	}
+
+	// 2. Loopback access without token (localhost) must succeed with 200
+	reqLocal := httptest.NewRequest("GET", "/pair?format=json", nil)
+	reqLocal.RemoteAddr = "127.0.0.1:54321"
+	recLocal := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recLocal, reqLocal)
+	if recLocal.Code != http.StatusOK {
+		t.Errorf("expected 200 for loopback request, got %d", recLocal.Code)
+	}
+	if !strings.Contains(recLocal.Header().Get("Content-Type"), "application/json") {
+		t.Errorf("expected application/json, got %s", recLocal.Header().Get("Content-Type"))
+	}
+	if !strings.Contains(recLocal.Body.String(), `"url"`) || !strings.Contains(recLocal.Body.String(), `"token"`) {
+		t.Errorf("expected JSON to contain url and token: %s", recLocal.Body.String())
+	}
+
+	// 3. Authenticated pairing with token parameter must succeed
+	reqToken := httptest.NewRequest("GET", "/pair?format=json&token="+token, nil)
+	recToken := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recToken, reqToken)
+	if recToken.Code != http.StatusOK {
+		t.Errorf("expected 200 with valid token, got %d", recToken.Code)
+	}
+
+	// 4. iOS HTML response with valid token
+	reqIOS := httptest.NewRequest("GET", "/pair?token="+token, nil)
 	reqIOS.Header.Set("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15")
 	recIOS := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(recIOS, reqIOS)
@@ -306,8 +326,8 @@ func TestPairEndpoint(t *testing.T) {
 		t.Errorf("expected iOS page to include shortcuts URI")
 	}
 
-	// 3. Android HTML response
-	reqAndroid := httptest.NewRequest("GET", "/pair", nil)
+	// 5. Android HTML response with valid token
+	reqAndroid := httptest.NewRequest("GET", "/pair?token="+token, nil)
 	reqAndroid.Header.Set("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36")
 	recAndroid := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(recAndroid, reqAndroid)
@@ -321,10 +341,14 @@ func TestPairEndpoint(t *testing.T) {
 }
 
 func TestPairHidesQRForMobile(t *testing.T) {
-	srv, _, forwarder := setupTestServer(t)
+	srv, tokenMgr, forwarder := setupTestServer(t)
+	token, err := tokenMgr.GetToken()
+	if err != nil {
+		t.Fatalf("failed to get token: %v", err)
+	}
 
-	// iPhone UA (pairing-QR scan): QR popup must be dismissed.
-	reqMobile := httptest.NewRequest("GET", "/pair", nil)
+	// iPhone UA (pairing-QR scan): carries token parameter, QR popup must be dismissed.
+	reqMobile := httptest.NewRequest("GET", "/pair?token="+token, nil)
 	reqMobile.Header.Set("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15")
 	recMobile := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(recMobile, reqMobile)
@@ -347,7 +371,7 @@ func TestPairHidesQRForMobile(t *testing.T) {
 	}
 
 	// Desktop UA: popup stays up.
-	reqDesktop := httptest.NewRequest("GET", "/pair", nil)
+	reqDesktop := httptest.NewRequest("GET", "/pair?token="+token, nil)
 	reqDesktop.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 	recDesktop := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(recDesktop, reqDesktop)

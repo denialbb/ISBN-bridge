@@ -148,7 +148,7 @@ func main() {
 					continue
 				}
 				log.Println("--------------------------------------------------")
-				log.Printf("🔄 Token expired! New token generated: %s", newToken)
+				log.Printf("🔄 Token expired! New token generated (prefix: %.8s...)", newToken)
 				log.Println("Open /qr in a browser for the updated pairing code:")
 				log.Println("--------------------------------------------------")
 
@@ -160,8 +160,12 @@ func main() {
 	}()
 
 	httpServer := &http.Server{
-		Addr:    srv.Addr(),
-		Handler: srv.Handler(),
+		Addr:              srv.Addr(),
+		Handler:           srv.Handler(),
+		ReadHeaderTimeout: 3 * time.Second,
+		ReadTimeout:       5 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       30 * time.Second,
 	}
 
 	go func() {

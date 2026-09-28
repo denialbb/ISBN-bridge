@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -534,7 +535,17 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tokenParam := strings.TrimSpace(r.URL.Query().Get("token"))
-	tokenMismatch := tokenParam != "" && tokenParam != activeToken
+	host := clientIP(r)
+	isLoopback := (host == "127.0.0.1" || host == "::1")
+	hasValidToken := (tokenParam != "" && subtle.ConstantTimeCompare([]byte(tokenParam), []byte(activeToken)) == 1)
+
+	if !isLoopback && !hasValidToken {
+		log.Printf("Unauthorized /pair access attempt from %s", r.RemoteAddr)
+		http.Error(w, "Unauthorized: valid token parameter or localhost required", http.StatusUnauthorized)
+		return
+	}
+
+	tokenMismatch := tokenParam != "" && !hasValidToken
 
 	serverURL := s.tokenMgr.BaseURL()
 	if serverURL == "" {
