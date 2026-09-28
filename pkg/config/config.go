@@ -223,6 +223,117 @@ func (c *Config) SetTokenTTL(ttl time.Duration) error {
 	return nil
 }
 
+// knownConfigKeys are the keys rendered by Save. Anything else found on
+// disk (e.g. client-specific keys like QRCode/theme) must survive a Save.
+var knownConfigKeys = map[string]bool{
+	"port": true, "ahk_port": true, "token_ttl_minutes": true,
+	"max_timestamp_skew_seconds": true, "max_timestamp_skew_minutes": true,
+	"rate_limit_max_requests": true, "rate_limit_window_seconds": true,
+	"replay_cache_size": true, "replay_ttl_seconds": true,
+	"hide_console": true, "network_mode": true, "server_ip": true,
+	"target_tab_title": true, "overwrite_existing_text": true,
+	"auto_paste_on_hover": true, "play_tap_sound": true, "sound_file": true,
+	"tooltip_offset_x": true, "tooltip_offset_y": true,
+	"auto_show_on_refresh": true, "qr_auto_show_on_refresh": true,
+	"auto_hide_seconds": true, "qr_auto_hide_seconds": true,
+	"popup_size": true, "qr_popup_size": true, "language": true,
+}
+
+type preservedKV struct {
+	section string // section header as written in the existing file ("" = top)
+	key     string // key spelling as written (readers may be case-sensitive)
+	value   string
+}
+
+// readPreservedKeys collects key/value pairs from an existing config file
+// that Save does not manage, so a round-trip never destroys foreign
+// settings (e.g. the Linux/AHK clients' QRCode/theme).
+func readPreservedKeys(path string) []preservedKV {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	var out []preservedKV
+	section := ""
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		raw := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(raw, "[") && strings.HasSuffix(raw, "]") {
+			section = strings.TrimSpace(raw[1 : len(raw)-1])
+			continue
+		}
+		if raw == "" || strings.HasPrefix(raw, "#") || strings.HasPrefix(raw, ";") {
+			continue
+		}
+		parts := strings.SplitN(raw, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		if key == "" || knownConfigKeys[strings.ToLower(key)] {
+			continue
+		}
+		out = append(out, preservedKV{section: section, key: key, value: strings.TrimSpace(parts[1])})
+	}
+	return out
+}
+
+// mergePreservedKeys splices foreign settings back into rendered content
+// under their original section headers (appending new sections at the end
+// when the template has no such header).
+func mergePreservedKeys(content string, extras []preservedKV) string {
+	if len(extras) == 0 {
+		return content
+	}
+	bySection := map[string][]preservedKV{}
+	var order []string
+	for _, kv := range extras {
+		norm := strings.ToLower(kv.section)
+		if _, ok := bySection[norm]; !ok {
+			order = append(order, norm)
+		}
+		bySection[norm] = append(bySection[norm], kv)
+	}
+
+	lines := strings.Split(content, "\n")
+	var out []string
+	appended := map[string]bool{}
+	flush := func(norm string) {
+		out = append(out, "# Preserved settings not managed by the Go server (kept as-is)")
+		for _, kv := range bySection[norm] {
+			out = append(out, kv.key+" = "+kv.value)
+		}
+		out = append(out, "")
+		appended[norm] = true
+	}
+
+	for _, line := range lines {
+		out = append(out, line)
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			norm := strings.ToLower(strings.TrimSpace(trimmed[1 : len(trimmed)-1]))
+			if kvs, ok := bySection[norm]; ok && !appended[norm] && len(kvs) > 0 {
+				flush(norm)
+			}
+		}
+	}
+	for _, norm := range order {
+		if appended[norm] {
+			continue
+		}
+		header := extras[0].section
+		for _, kv := range bySection[norm] {
+			header = kv.section
+			break
+		}
+		out = append(out, "["+header+"]")
+		flush(norm)
+	}
+	return strings.Join(out, "\n")
+}
+
 // Save serializes the configuration to disk in INI format with clear commentary.
 func (c *Config) Save(path string) error {
 	dir := filepath.Dir(path)
@@ -330,6 +441,11 @@ language = %s
 		c.QRPopupSize,
 		c.Language,
 	)
+
+	// Never destroy foreign settings (e.g. QRCode/theme owned by the
+	// desktop clients): splice back any on-disk keys the template
+	// does not manage.
+	content = mergePreservedKeys(content, readPreservedKeys(path))
 
 	return os.WriteFile(path, []byte(content), 0644)
 }

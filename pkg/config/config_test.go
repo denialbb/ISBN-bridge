@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -196,6 +197,55 @@ server_ip = 172.20.10.5
 	}
 	if reloaded.ServerIP != "172.20.10.5" {
 		t.Errorf("expected reloaded ServerIP '172.20.10.5', got %q", reloaded.ServerIP)
+	}
+}
+
+func TestSavePreservesForeignKeys(t *testing.T) {
+	tempDir := t.TempDir()
+	confPath := filepath.Join(tempDir, "scanner.conf")
+
+	// theme is owned by the desktop clients; the Go template must not
+	// destroy it (regression: tray Token Expiry wiped QRCode/theme).
+	content := `
+[Server]
+port = 8765
+
+[QRCode]
+auto_show_on_refresh = true
+theme = matrix
+
+[Custom]
+anything = goes
+`
+	if err := os.WriteFile(confPath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := LoadOrCreate(confPath)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+	if err := cfg.SetTokenTTL(30 * time.Minute); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	raw, err := os.ReadFile(confPath)
+	if err != nil {
+		t.Fatalf("failed to read config: %v", err)
+	}
+	for _, want := range []string{"theme = matrix", "anything = goes", "token_ttl_minutes = 30"} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("expected saved config to contain %q", want)
+		}
+	}
+
+	// Second round-trip must not duplicate preserved lines.
+	if err := cfg.Save(confPath); err != nil {
+		t.Fatalf("failed to re-save config: %v", err)
+	}
+	raw, _ = os.ReadFile(confPath)
+	if n := strings.Count(string(raw), "theme = matrix"); n != 1 {
+		t.Errorf("expected exactly 1 preserved theme line, got %d", n)
 	}
 }
 
