@@ -632,34 +632,59 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 	actionSection := ""
 
 	if isIOS {
+		// Loading interstitial: attempt the primary Pair shortcut on load,
+		// then fall back to the alternate shortcut name if Safari is still
+		// in the foreground (i.e. the first jump was blocked or the
+		// shortcut is saved under its alternate name). Manual actions stay
+		// hidden behind <details> so first paint never looks like a choice.
 		autoRedirectScript = fmt.Sprintf(`
   <script>
     window.onload = function() {
       setTimeout(function() {
         window.location.href = %q;
       }, 400);
+      setTimeout(function() {
+        if (document.visibilityState === "visible") {
+          window.location.href = %q;
+        }
+      }, 1600);
     };
-  </script>`, primaryShortcutURI)
+  </script>`, primaryShortcutURI, altShortcutURI)
 
 		iosPrimary := T("pair_ios_primary")
 		iosAlt := T("pair_ios_alt")
 		iosSub := T("pair_ios_sub")
+		spinTitle := T("pair_spin_title")
+		fallback := T("pair_fallback")
+		iosCopy := T("pair_copy")
 
 		actionSection = fmt.Sprintf(`
-    <a href=%q class="btn btn-primary">%s</a>
-    <a href=%q class="btn btn-secondary">%s</a>
+    <div class="spinner" role="status" aria-label="%s"></div>
+    <p class="spin-title">%s</p>
     <p class="subtext">%s</p>
-`, primaryShortcutURI, iosPrimary, altShortcutURI, iosAlt, iosSub)
+    <details class="fallback">
+      <summary>%s</summary>
+      <a href=%q class="btn btn-primary">%s</a>
+      <a href=%q class="btn btn-secondary">%s</a>
+      <button class="btn btn-secondary" onclick="copyConfig()">%s</button>
+    </details>
+`, spinTitle, spinTitle, iosSub, fallback, primaryShortcutURI, iosPrimary, altShortcutURI, iosAlt, iosCopy)
 	} else if isAndroid {
 		andCopy := T("pair_and_copy")
 		andDownload := T("pair_and_download")
 		andSub := T("pair_and_sub")
+		andCopyURL := T("pair_and_copy_url")
+		andCopyToken := T("pair_and_copy_token")
 
 		actionSection = fmt.Sprintf(`
     <button class="btn btn-primary" onclick="copyConfig()">%s</button>
+    <div class="copy-rows">
+      <button class="btn btn-secondary" onclick="copyText(%s)">%s</button>
+      <button class="btn btn-secondary" onclick="copyText(%s)">%s</button>
+    </div>
     <a href="data:application/json;charset=utf-8,%s" download="isbn_bridge_config.json" class="btn btn-secondary">%s</a>
     <p class="subtext">%s</p>
-`, andCopy, url.PathEscape(configJSON), andDownload, andSub)
+`, andCopy, strconv.Quote(serverURL), andCopyURL, strconv.Quote(activeToken), andCopyToken, url.PathEscape(configJSON), andDownload, andSub)
 	} else {
 		launchText := T("pair_launch")
 		copyText := T("pair_copy")
@@ -699,6 +724,14 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
     .info-label { color: #64748b; font-weight: 500; }
     .info-val { color: #cbd5e1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
     #toast { display: none; margin-top: 12px; font-size: 13px; color: #4ade80; }
+    .spinner { width: 44px; height: 44px; margin: 8px auto 16px auto; border-radius: 50%; border: 4px solid #334155; border-top-color: #3b82f6; animation: spin 0.9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin-title { font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 8px; }
+    details.fallback { margin-top: 16px; }
+    details.fallback summary { font-size: 13px; color: #94a3b8; cursor: pointer; margin-bottom: 12px; }
+    details.fallback .btn { margin-top: 0; }
+    .copy-rows { display: flex; gap: 8px; }
+    .copy-rows .btn { flex: 1; font-size: 13px; padding: 12px 8px; }
   </style>
   {{AUTO_REDIRECT}}
 </head>
@@ -729,13 +762,16 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
   </div>
 
   <script>
+    function showToast() {
+      const t = document.getElementById("toast");
+      t.style.display = "block";
+      setTimeout(() => { t.style.display = "none"; }, 3000);
+    }
+    function copyText(t) {
+      navigator.clipboard.writeText(t).then(showToast);
+    }
     function copyConfig() {
-      const cfg = {{CONFIG_JSON_LITERAL}};
-      navigator.clipboard.writeText(cfg).then(function() {
-        const t = document.getElementById("toast");
-        t.style.display = "block";
-        setTimeout(() => { t.style.display = "none"; }, 3000);
-      });
+      copyText({{CONFIG_JSON_LITERAL}});
     }
   </script>
 </body>

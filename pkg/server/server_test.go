@@ -352,6 +352,52 @@ func TestPairEndpoint(t *testing.T) {
 	}
 }
 
+func TestPairSpinnerInterstitial(t *testing.T) {
+	srv, tokenMgr, _ := setupTestServer(t)
+	token, err := tokenMgr.GetToken()
+	if err != nil {
+		t.Fatalf("failed to get token: %v", err)
+	}
+
+	// iOS page must be a loading interstitial: spinner first paint, both
+	// shortcut targets present, manual actions hidden behind <details>.
+	reqIOS := httptest.NewRequest("GET", "/pair?token="+token, nil)
+	reqIOS.Header.Set("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15")
+	recIOS := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recIOS, reqIOS)
+	bodyIOS := recIOS.Body.String()
+
+	for _, want := range []string{
+		`class="spinner"`,
+		"<details",
+		"Pair%20ISBN%20Bridge",
+		"ISBN%20Bridge%20Pair",
+		"visibilityState",
+	} {
+		if !strings.Contains(bodyIOS, want) {
+			t.Errorf("expected iOS interstitial to contain %q", want)
+		}
+	}
+
+	// Android page must offer per-value copy targets plus the config download.
+	reqAndroid := httptest.NewRequest("GET", "/pair?token="+token, nil)
+	reqAndroid.Header.Set("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36")
+	recAndroid := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recAndroid, reqAndroid)
+	bodyAndroid := recAndroid.Body.String()
+
+	for _, want := range []string{
+		"copyText(",
+		"isbn_bridge_config.json",
+		"Copy server URL",
+		"Copy token",
+	} {
+		if !strings.Contains(bodyAndroid, want) {
+			t.Errorf("expected Android page to contain %q", want)
+		}
+	}
+}
+
 func TestPairHidesQRForMobile(t *testing.T) {
 	srv, tokenMgr, forwarder := setupTestServer(t)
 	token, err := tokenMgr.GetToken()

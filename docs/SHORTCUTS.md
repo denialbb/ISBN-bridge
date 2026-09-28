@@ -17,7 +17,7 @@ Scanning from an iPhone uses two Apple Shortcuts. No third-party App Store apps 
 1. **Receive Input**: Receives JSON config payload (`{"url":"...","token":"..."}`) passed directly from the browser or QR scanner.
 2. **Save File**: Writes the configuration dictionary directly to `Shortcuts/isbn_bridge_config.json` in iCloud Drive / On My iPhone (Overwrite: `true`).
 3. **Notification**: Vibrates device and shows confirmation ("Paired with PC at [url]").
-4. **Auto-Launch Scanner (Optional & Recommended)**: Calls action **"Run Shortcut"** targeting your Scanner Shortcut with *"Wait Until Finished"* disabled, followed by **"Exit Shortcut"**. After pairing, the book scanner opens directly.
+4. **Auto-Launch Scanner (Required)**: Calls action **"Run Shortcut"** targeting your Scanner Shortcut with *"Wait Until Finished"* (or *"Wait for Response"*) turned **OFF**, followed by **"Exit Shortcut"**. Pairing then hands off instantly: the Pair shortcut terminates and the book scanner opens directly. Leaving wait enabled leaves Pair lingering until the scanner closes.
 
 > **Camera Pairing**: Point your iPhone camera at the QR code on your PC. Tap the link, tap **Open in Shortcuts**, and the scanner opens. No IP lookup or typing needed.
 
